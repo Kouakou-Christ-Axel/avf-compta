@@ -237,20 +237,17 @@ async function telecharger(def: TDocumentDefinitions, fichier: string) {
     import("pdfmake/build/pdfmake"),
     import("pdfmake/build/vfs_fonts"),
   ]);
-  // La structure du module de polices varie selon la version : on tente les
-  // emplacements connus.
-  const f = fonts as unknown as {
-    vfs?: Record<string, string>;
-    default?: {
-      vfs?: Record<string, string>;
-      pdfMake?: { vfs: Record<string, string> };
-    };
-    pdfMake?: { vfs: Record<string, string> };
-  };
+  // pdfmake 0.3 expose la vfs comme export par défaut et l'enregistre via
+  // addVirtualFileSystem (et non plus pdfMake.vfs).
   const vfs =
-    f.vfs ?? f.default?.vfs ?? f.default?.pdfMake?.vfs ?? f.pdfMake?.vfs;
+    (fonts as { default?: Record<string, string> }).default ??
+    (fonts as unknown as Record<string, string>);
   if (vfs) {
-    (pdfMake as unknown as { vfs: Record<string, string> }).vfs = vfs;
+    if (typeof pdfMake.addVirtualFileSystem === "function") {
+      pdfMake.addVirtualFileSystem(vfs);
+    } else {
+      pdfMake.vfs = vfs;
+    }
   }
   pdfMake.createPdf(def).download(fichier);
 }

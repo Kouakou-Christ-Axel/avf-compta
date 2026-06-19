@@ -286,6 +286,7 @@ function DetailNote({
   const [paiements, setPaiements] = useState<Paiement[]>([]);
   const [montant, setMontant] = useState("");
   const [methode, setMethode] = useState("");
+  const [datePaiement, setDatePaiement] = useState(aujourdhui());
   const [erreur, setErreur] = useState<string | null>(null);
 
   async function recharger() {
@@ -312,18 +313,33 @@ function DetailNote({
       setErreur("Montant invalide");
       return;
     }
+    if (!datePaiement) {
+      setErreur("Date de paiement requise");
+      return;
+    }
     try {
       await enregistrerPaiement({
         note_id: noteId,
         montant: m,
-        date_paiement: aujourdhui(),
+        date_paiement: datePaiement,
         methode: methode || null,
       });
       setMontant("");
       setMethode("");
+      setDatePaiement(aujourdhui());
       await recharger();
       onChangement();
       showToast("Paiement enregistré");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
+  async function exporterNote() {
+    if (!detail) return;
+    try {
+      await exportNotePdf(detail, clientNom, solde, params);
+      showToast("PDF généré");
     } catch (err) {
       setErreur(String(err));
     }
@@ -381,11 +397,7 @@ function DetailNote({
         </div>
 
         <div className="detail-actions">
-          <button
-            onClick={() => exportNotePdf(detail, clientNom, solde, params)}
-          >
-            Exporter la note en PDF
-          </button>
+          <button onClick={exporterNote}>Exporter la note en PDF</button>
         </div>
 
         {!solde.payee ? (
@@ -395,6 +407,12 @@ function DetailNote({
               placeholder="Montant (FCFA)"
               value={montant}
               onChange={(e) => setMontant(e.target.value)}
+            />
+            <input
+              type="date"
+              aria-label="Date du paiement"
+              value={datePaiement}
+              onChange={(e) => setDatePaiement(e.target.value)}
             />
             <input
               placeholder="Mode (espèces, virement…)"

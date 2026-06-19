@@ -7,7 +7,16 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Corrigé
+
+- L'export PDF ne produisait rien : les polices pdfmake (0.3) doivent être
+  enregistrées via `addVirtualFileSystem` ; un toast confirme désormais la
+  génération ou signale l'échec.
+
 ### Ajouté
+
+- Saisie de la **date de paiement** lors de l'encaissement (par défaut
+  aujourd'hui).
 
 - **Référence de note auto-générée** au format `AA-MM-NNNN` (séquence remise à
   zéro chaque mois) — plus de saisie manuelle.
