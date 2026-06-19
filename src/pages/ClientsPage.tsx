@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
-import { createClient, deleteClient, listClients } from "../api/client";
-import type { Client } from "../api/types";
+import { createClient, deleteClient, listClientsResume } from "../api/client";
+import type { ClientResume } from "../api/types";
+import { formatMontant } from "../api/money";
 import { CopyText } from "../components/CopyText";
 
 export function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<ClientResume[]>([]);
   const [nom, setNom] = useState("");
   const [email, setEmail] = useState("");
   const [telephone, setTelephone] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
 
   async function recharger() {
-    setClients(await listClients());
+    setClients(await listClientsResume());
   }
 
   useEffect(() => {
@@ -101,6 +102,9 @@ export function ClientsPage() {
               <th>Nom</th>
               <th>Email</th>
               <th>Téléphone</th>
+              <th className="col-montant">Montant</th>
+              <th className="col-montant">Payé</th>
+              <th className="col-montant">Restant</th>
               <th></th>
             </tr>
           </thead>
@@ -110,6 +114,11 @@ export function ClientsPage() {
                 <td className="cell-fort">{c.nom}</td>
                 <td>{c.email ? <CopyText value={c.email} /> : "—"}</td>
                 <td>{c.telephone ? <CopyText value={c.telephone} /> : "—"}</td>
+                <td className="col-montant">
+                  {formatMontant(c.total_facture)}
+                </td>
+                <td className="col-montant">{formatMontant(c.total_paye)}</td>
+                <td className="col-montant">{formatMontant(c.solde)}</td>
                 <td className="cell-actions">
                   <button
                     className="btn-danger"
@@ -122,7 +131,7 @@ export function ClientsPage() {
             ))}
             {clients.length === 0 && (
               <tr>
-                <td colSpan={4} className="vide">
+                <td colSpan={7} className="vide">
                   Aucun client pour le moment.
                 </td>
               </tr>

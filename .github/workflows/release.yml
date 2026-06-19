@@ -41,9 +41,13 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signature des mises à jour (plugin updater). Secrets à définir dans
+          # le dépôt ; sans eux, le build échoue car createUpdaterArtifacts=true.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "avf-compta ${{ github.ref_name }}"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: --bundles msi,nsis

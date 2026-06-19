@@ -9,6 +9,7 @@ const detail: NoteDetail = {
     reference: "26-06-0001",
     date_emission: "2026-06-18",
     statut: "emise",
+    echeance: null,
     cree_le: "2026-06-18",
   },
   lignes: [
@@ -22,6 +23,9 @@ const detail: NoteDetail = {
     },
   ],
   total: 100000,
+  depenses: [],
+  depenses_total: 0,
+  marge: 100000,
 };
 
 const params: Parametres = {
@@ -49,7 +53,7 @@ describe("noteDocDefinition", () => {
 });
 
 describe("recuDocDefinition", () => {
-  it("inclut le numéro, le montant et les coordonnées de paiement", () => {
+  it("inclut le numéro et le montant, sans les coordonnées de paiement", () => {
     const recu: RecuDetail = {
       id: 1,
       numero: "RECU-0001",
@@ -66,6 +70,23 @@ describe("recuDocDefinition", () => {
     const t = texte(recuDocDefinition(recu, params));
     expect(t).toContain("RECU-0001");
     expect(t).toContain("100 000 FCFA");
-    expect(t).toContain("Wave +225 0700000000");
+    // Les coordonnées de paiement ne figurent pas sur le reçu.
+    expect(t).not.toContain("Wave +225 0700000000");
+  });
+});
+
+describe("noteDocDefinition (reste à payer)", () => {
+  it("affiche le reste à payer", () => {
+    const t = texte(
+      noteDocDefinition(detail, "Acme SARL", {
+        note_id: 1,
+        total: 100000,
+        paye: 40000,
+        solde: 60000,
+        payee: false,
+      }),
+    );
+    expect(t).toContain("Reste à payer");
+    expect(t).toContain("60 000 FCFA");
   });
 });

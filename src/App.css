@@ -291,6 +291,15 @@ textarea:focus {
   background: #f8fafc;
 }
 
+.maj-notes {
+  white-space: pre-wrap;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.88rem;
+}
+
 /* ---------- Buttons ---------- */
 
 button {
@@ -844,4 +853,70 @@ button:hover {
   .no-print {
     display: none !important;
   }
+}
+
+/* ---------- Échéances & rappels (notes) ---------- */
+
+.badge-retard {
+  margin-left: 0.4rem;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.rappel-banner {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border: 1px solid #fcd34d;
+  border-left: 4px solid var(--warn);
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* ---------- Dépenses & marge (détail note) ---------- */
+
+.depenses-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.depenses-form input {
+  flex: 1 1 8rem;
+}
+
+.marge-box {
+  display: flex;
+  gap: 1.2rem;
+  margin-top: 0.9rem;
+  padding: 0.8rem 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.marge-box > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.marge-box span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.marge-box strong {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.marge-positive {
+  color: var(--ok);
+}
+
+.marge-negative {
+  color: var(--danger);
 }

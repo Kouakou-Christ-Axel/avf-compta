@@ -1,6 +1,7 @@
 import { formatMontant } from "../api/money";
 import { exportRecuPdf } from "../api/pdf";
 import type { Parametres, RecuDetail } from "../api/types";
+import { useToast } from "./toast-context";
 
 /** Aperçu d'un reçu, imprimable (window.print) ou exportable en PDF. */
 export function RecuImprimable({
@@ -12,7 +13,17 @@ export function RecuImprimable({
   params?: Parametres | null;
   onClose: () => void;
 }) {
+  const { showToast } = useToast();
   const cabinet = params?.cabinet_nom || "avf-compta";
+
+  async function exporter() {
+    try {
+      await exportRecuPdf(recu, params);
+      showToast("PDF généré");
+    } catch (e) {
+      showToast(`Échec de l'export : ${e}`);
+    }
+  }
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -70,22 +81,13 @@ export function RecuImprimable({
             <strong>{formatMontant(recu.montant)}</strong>
           </section>
 
-          {params?.coordonnees_paiement && (
-            <section className="recu-bloc">
-              <h3>Coordonnées de paiement</h3>
-              <p className="recu-paiement">{params.coordonnees_paiement}</p>
-            </section>
-          )}
-
           <footer className="recu-pied">
             Reçu pour le montant indiqué. Merci de votre confiance.
           </footer>
         </div>
 
         <div className="modal-actions no-print">
-          <button onClick={() => exportRecuPdf(recu, params)}>
-            Exporter PDF
-          </button>
+          <button onClick={exporter}>Exporter PDF</button>
           <button className="btn-primary" onClick={() => window.print()}>
             Imprimer
           </button>

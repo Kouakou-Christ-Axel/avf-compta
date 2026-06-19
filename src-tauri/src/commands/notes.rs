@@ -1,6 +1,6 @@
 use super::DbState;
 use crate::error::AppResult;
-use crate::models::{NewNote, NoteDeFrais, NoteDetail};
+use crate::models::{NewNote, NoteDeFrais, NoteDetail, NoteResume};
 use crate::repositories::notes;
 use crate::services::notes_service;
 use tauri::State;
@@ -9,6 +9,12 @@ use tauri::State;
 pub fn list_notes(state: State<'_, DbState>) -> AppResult<Vec<NoteDeFrais>> {
     let conn = state.lock().unwrap();
     notes::list(&conn)
+}
+
+#[tauri::command]
+pub fn list_notes_resume(state: State<'_, DbState>) -> AppResult<Vec<NoteResume>> {
+    let conn = state.lock().unwrap();
+    notes::list_resume(&conn)
 }
 
 #[tauri::command]

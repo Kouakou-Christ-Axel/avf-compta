@@ -9,6 +9,28 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ### Ajouté
 
+- **Mises à jour intégrées** : la page Paramètres permet de vérifier, télécharger
+  et installer la dernière version directement depuis l'application (plugin
+  updater Tauri, mises à jour signées, source = GitHub Releases). Les releases
+  sont désormais publiées directement (plus de brouillon).
+- **Cumuls par client** : colonnes Montant (facturé), Payé et Restant dans la
+  liste des clients.
+- **Échéances** sur les notes de frais : date d'échéance, badge « En retard »,
+  bannière de rappel et notification système pour les notes échues impayées.
+- **Module dépenses** : dépenses rattachées à une note de frais et calcul de la
+  **marge** (total facturé − cumul des dépenses) dans le détail de la note.
+
+### Corrigé
+
+- L'export PDF ne produisait rien : les polices pdfmake (0.3) doivent être
+  enregistrées via `addVirtualFileSystem` ; un toast confirme désormais la
+  génération ou signale l'échec.
+
+### Ajouté
+
+- Saisie de la **date de paiement** lors de l'encaissement (par défaut
+  aujourd'hui).
+
 - **Référence de note auto-générée** au format `AA-MM-NNNN` (séquence remise à
   zéro chaque mois) — plus de saisie manuelle.
 - **Export PDF** des notes de frais et des reçus (via pdfmake).

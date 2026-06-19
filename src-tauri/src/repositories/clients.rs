@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{Client, NewClient};
+use crate::models::{Client, ClientResume, NewClient};
 use rusqlite::{Connection, Row};
 
 fn map_row(row: &Row) -> rusqlite::Result<Client> {
@@ -36,6 +36,37 @@ pub fn get(conn: &Connection, id: i64) -> AppResult<Client> {
 pub fn list(conn: &Connection) -> AppResult<Vec<Client>> {
     let mut stmt = conn.prepare("SELECT * FROM clients ORDER BY nom COLLATE NOCASE")?;
     let rows = stmt.query_map([], map_row)?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// Récapitulatif par client : cumul facturé (notes), cumul encaissé, restant.
+pub fn list_resume(conn: &Connection) -> AppResult<Vec<ClientResume>> {
+    let mut stmt = conn.prepare(
+        "SELECT c.id, c.nom, c.email, c.telephone,
+                COALESCE((SELECT SUM(l.prix_snapshot * l.quantite)
+                          FROM note_lignes l
+                          JOIN notes_de_frais n ON n.id = l.note_id
+                          WHERE n.client_id = c.id), 0) AS total_facture,
+                COALESCE((SELECT SUM(p.montant)
+                          FROM paiements p
+                          JOIN notes_de_frais n ON n.id = p.note_id
+                          WHERE n.client_id = c.id), 0) AS total_paye
+         FROM clients c
+         ORDER BY c.nom COLLATE NOCASE",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let total_facture: i64 = row.get("total_facture")?;
+        let total_paye: i64 = row.get("total_paye")?;
+        Ok(ClientResume {
+            id: row.get("id")?,
+            nom: row.get("nom")?,
+            email: row.get("email")?,
+            telephone: row.get("telephone")?,
+            total_facture,
+            total_paye,
+            solde: total_facture - total_paye,
+        })
+    })?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
@@ -131,5 +162,53 @@ mod tests {
         delete(&conn, id).unwrap();
         assert!(matches!(get(&conn, id), Err(AppError::NotFound(_))));
         assert!(matches!(delete(&conn, id), Err(AppError::NotFound(_))));
+    }
+
+    #[test]
+    fn list_resume_cumulates_facture_and_paye() {
+        use crate::models::note::NewNoteLigne;
+        use crate::models::{NewNote, NewPaiement, NewPrestation};
+        use crate::repositories::prestations;
+        use crate::services::{notes_service, paiements_service};
+
+        let mut conn = open_in_memory().unwrap();
+        let client = create(&conn, &sample()).unwrap();
+        let presta = prestations::create(
+            &conn,
+            &NewPrestation {
+                libelle: "Conseil".into(),
+                prix: 100_000,
+            },
+        )
+        .unwrap();
+        let note = notes_service::create_note(
+            &mut conn,
+            &NewNote {
+                client_id: client,
+                date_emission: "2026-06-18".into(),
+                echeance: None,
+                lignes: vec![NewNoteLigne {
+                    prestation_id: presta,
+                    quantite: 2,
+                }],
+            },
+        )
+        .unwrap();
+        paiements_service::enregistrer(
+            &conn,
+            &NewPaiement {
+                note_id: note,
+                montant: 50_000,
+                date_paiement: "2026-06-18".into(),
+                methode: None,
+            },
+        )
+        .unwrap();
+
+        let resume = list_resume(&conn).unwrap();
+        assert_eq!(resume.len(), 1);
+        assert_eq!(resume[0].total_facture, 200_000);
+        assert_eq!(resume[0].total_paye, 50_000);
+        assert_eq!(resume[0].solde, 150_000);
     }
 }

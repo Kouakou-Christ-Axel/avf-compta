@@ -91,6 +91,7 @@ mod tests {
             &NewNote {
                 client_id: client,
                 date_emission: "2026-06-18".into(),
+                echeance: None,
                 lignes: vec![NewNoteLigne {
                     prestation_id: presta,
                     quantite: 3,

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getParametres, saveParametres } from "../api/client";
 import type { Parametres } from "../api/types";
 import { useToast } from "../components/toast-context";
+import { MisesAJour } from "../components/MisesAJour";
 
 const VIDE: Parametres = {
   cabinet_nom: null,
@@ -141,6 +142,8 @@ export function ParametresPage() {
           Enregistrer
         </button>
       </form>
+
+      <MisesAJour />
     </section>
   );
 }
