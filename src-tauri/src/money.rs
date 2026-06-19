@@ -65,7 +65,12 @@ impl Money {
         } else {
             int_part.parse().map_err(|_| invalid())?
         };
-        let digit = |i: usize| frac_part.as_bytes().get(i).map_or(0, |&b| (b - b'0') as i64);
+        let digit = |i: usize| {
+            frac_part
+                .as_bytes()
+                .get(i)
+                .map_or(0, |&b| (b - b'0') as i64)
+        };
         let mut cents = int_val
             .checked_mul(100)
             .and_then(|c| c.checked_add(digit(0) * 10 + digit(1)))
