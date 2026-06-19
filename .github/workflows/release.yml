@@ -10,21 +10,11 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
-    name: Build Linux (AppImage + .deb)
-    runs-on: ubuntu-latest
+  build-windows:
+    name: Build Windows (.msi + .exe)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Dépendances système Tauri (Linux)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -43,7 +33,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Synchronise la version depuis le tag
-        run: node scripts/set-version.mjs "${GITHUB_REF_NAME#v}"
+        # set-version.mjs retire lui-même le préfixe « v » ; pas d'expansion
+        # shell (cross-plateforme : le runner Windows utilise PowerShell).
+        run: node scripts/set-version.mjs ${{ github.ref_name }}
 
       - name: Build + publication de la release
         uses: tauri-apps/tauri-action@v0
@@ -54,4 +46,4 @@ jobs:
           releaseName: "avf-compta ${{ github.ref_name }}"
           releaseDraft: true
           prerelease: false
-          args: --bundles deb,appimage
+          args: --bundles msi,nsis

@@ -17,4 +17,4 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 - Développement en TDD : tests unitaires Rust (SQLite en mémoire) et tests
   frontend (Vitest + Testing Library, mock IPC Tauri).
 - Intégration continue (lint, format, tests Rust + frontend) et workflow de
-  release produisant les bundles Linux (AppImage, .deb) sur tag `vX.Y.Z`.
+  release produisant les bundles Windows (`.msi`, `.exe`/NSIS) sur tag `vX.Y.Z`.

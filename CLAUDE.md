@@ -103,9 +103,10 @@ expects exactly this.
 
 - `.github/workflows/ci.yml` runs on every push/PR: a Rust job (fmt, clippy,
   tests) and a frontend job (typecheck, lint, prettier, vitest).
-- `.github/workflows/release.yml` runs on tags `v*`: syncs the version into the
-  three manifests via `scripts/set-version.mjs`, then `tauri-action` builds the
-  Linux bundles (`--bundles deb,appimage`) and drafts a GitHub Release.
+- `.github/workflows/release.yml` runs on tags `v*` on a `windows-latest`
+  runner: syncs the version into the three manifests via
+  `scripts/set-version.mjs`, then `tauri-action` builds the Windows bundles
+  (`--bundles msi,nsis`) and drafts a GitHub Release.
 - **Version single source of truth is the git tag.** `package.json`,
   `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` stay at the `0.1.0` dev
   placeholder; the release workflow rewrites them at build time (not committed
