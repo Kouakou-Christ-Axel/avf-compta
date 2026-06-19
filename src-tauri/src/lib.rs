@@ -20,6 +20,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Mise à jour automatique (desktop uniquement).
             #[cfg(desktop)]
@@ -64,6 +65,7 @@ pub fn run() {
             commands::depenses::list_depenses,
             commands::depenses::create_depense,
             commands::depenses::delete_depense,
+            commands::fichiers::enregistrer_fichier,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

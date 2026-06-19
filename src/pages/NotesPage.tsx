@@ -73,6 +73,7 @@ function badgeStatut(statut: string) {
 }
 
 export function NotesPage() {
+  const { showToast } = useToast();
   const [notes, setNotes] = useState<NoteResume[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [prestations, setPrestations] = useState<Prestation[]>([]);
@@ -165,6 +166,21 @@ export function NotesPage() {
   const noteSelectionnee = notes.find((n) => n.id === selection);
   const clientSelectionne =
     clients.find((c) => c.id === noteSelectionnee?.client_id)?.nom ?? "Client";
+
+  async function exporterNoteListe(n: NoteResume) {
+    setErreur(null);
+    try {
+      const nom = clients.find((c) => c.id === n.client_id)?.nom ?? "Client";
+      const [detail, solde] = await Promise.all([
+        getNote(n.id),
+        soldeNote(n.id),
+      ]);
+      const ok = await exportNotePdf(detail, nom, solde, params);
+      if (ok) showToast("PDF enregistré");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
 
   return (
     <section className="page">
@@ -302,6 +318,7 @@ export function NotesPage() {
                 <td className="col-montant">{formatMontant(n.solde)}</td>
                 <td className="cell-actions">
                   <button onClick={() => setSelection(n.id)}>Détail</button>
+                  <button onClick={() => exporterNoteListe(n)}>PDF</button>
                 </td>
               </tr>
             ))}
@@ -414,8 +431,8 @@ function DetailNote({
   async function exporterNote() {
     if (!detail) return;
     try {
-      await exportNotePdf(detail, clientNom, solde, params);
-      showToast("PDF généré");
+      const ok = await exportNotePdf(detail, clientNom, solde, params);
+      if (ok) showToast("PDF enregistré");
     } catch (err) {
       setErreur(String(err));
     }

@@ -7,6 +7,15 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Corrigé / Ajouté (export PDF)
+
+- **Export PDF réparé** : enregistrement via une vraie boîte « Enregistrer sous »
+  (dialogue Tauri + écriture par le backend) au lieu d'un téléchargement bloqué
+  par la WebView.
+- Boutons d'export **directement dans les listes** (Reçus et Notes de frais).
+- **Reçus exportables en A5** (en plus de l'A4).
+
+
 ### Ajouté
 
 - **Mises à jour intégrées** : la page Paramètres permet de vérifier, télécharger

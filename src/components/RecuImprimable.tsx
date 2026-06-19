@@ -1,9 +1,9 @@
 import { formatMontant } from "../api/money";
-import { exportRecuPdf } from "../api/pdf";
+import { exportRecuPdf, type FormatPage } from "../api/pdf";
 import type { Parametres, RecuDetail } from "../api/types";
 import { useToast } from "./toast-context";
 
-/** Aperçu d'un reçu, imprimable (window.print) ou exportable en PDF. */
+/** Aperçu d'un reçu, imprimable (window.print) ou exportable en PDF (A4/A5). */
 export function RecuImprimable({
   recu,
   params,
@@ -16,10 +16,10 @@ export function RecuImprimable({
   const { showToast } = useToast();
   const cabinet = params?.cabinet_nom || "avf-compta";
 
-  async function exporter() {
+  async function exporter(format: FormatPage) {
     try {
-      await exportRecuPdf(recu, params);
-      showToast("PDF généré");
+      const ok = await exportRecuPdf(recu, params, format);
+      if (ok) showToast(`PDF (${format}) enregistré`);
     } catch (e) {
       showToast(`Échec de l'export : ${e}`);
     }
@@ -87,7 +87,8 @@ export function RecuImprimable({
         </div>
 
         <div className="modal-actions no-print">
-          <button onClick={exporter}>Exporter PDF</button>
+          <button onClick={() => exporter("A4")}>PDF A4</button>
+          <button onClick={() => exporter("A5")}>PDF A5</button>
           <button className="btn-primary" onClick={() => window.print()}>
             Imprimer
           </button>
