@@ -115,3 +115,9 @@ expects exactly this.
   back). Release flow: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 - Conventional-commit messages (`feat:`/`fix:`/`chore:`) + hand-maintained
   `CHANGELOG.md`.
+- **In-app updates** via `tauri-plugin-updater` (desktop): the app checks
+  `releases/latest/download/latest.json` on GitHub. `bundle.createUpdaterArtifacts`
+  is on, so `release.yml` needs the repo secrets `TAURI_SIGNING_PRIVATE_KEY`
+  (+ `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) to sign updates; the matching public
+  key lives in `tauri.conf.json`. Releases must be **published** (not draft) for
+  the updater to see them.

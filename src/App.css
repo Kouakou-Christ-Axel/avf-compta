@@ -291,6 +291,15 @@ textarea:focus {
   background: #f8fafc;
 }
 
+.maj-notes {
+  white-space: pre-wrap;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.88rem;
+}
+
 /* ---------- Buttons ---------- */
 
 button {

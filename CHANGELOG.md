@@ -7,6 +7,12 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Ajouté
+
+- **Mises à jour intégrées** : la page Paramètres permet de vérifier, télécharger
+  et installer la dernière version directement depuis l'application (plugin
+  updater Tauri, mises à jour signées, source = GitHub Releases).
+
 ### Corrigé
 
 - L'export PDF ne produisait rien : les polices pdfmake (0.3) doivent être
