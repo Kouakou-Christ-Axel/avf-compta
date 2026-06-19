@@ -15,7 +15,6 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 - Boutons d'export **directement dans les listes** (Reçus et Notes de frais).
 - **Reçus exportables en A5** (en plus de l'A4).
 
-
 ### Ajouté
 
 - **Mises à jour intégrées** : la page Paramètres permet de vérifier, télécharger
