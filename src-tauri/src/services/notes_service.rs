@@ -49,13 +49,15 @@ pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
     let tx = conn.transaction()?;
     let reference = generer_reference(&tx, &n.date_emission)?;
     tx.execute(
-        "INSERT INTO notes_de_frais (client_id, reference, date_emission, statut, cree_le)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO notes_de_frais
+            (client_id, reference, date_emission, statut, echeance, cree_le)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         rusqlite::params![
             n.client_id,
             reference,
             n.date_emission,
             STATUT_EMISE,
+            n.echeance,
             crate::repositories::now()
         ],
     )?;
@@ -110,6 +112,7 @@ mod tests {
         NewNote {
             client_id,
             date_emission: "2026-06-18".into(),
+            echeance: None,
             lignes: vec![NewNoteLigne {
                 prestation_id,
                 quantite: qte,

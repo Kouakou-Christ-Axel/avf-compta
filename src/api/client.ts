@@ -3,7 +3,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Client,
+  ClientResume,
+  Depense,
   NewClient,
+  NewDepense,
   NewNote,
   NewPaiement,
   NewPrestation,
@@ -21,6 +24,8 @@ import type {
 
 // --- Clients ---
 export const listClients = () => invoke<Client[]>("list_clients");
+export const listClientsResume = () =>
+  invoke<ClientResume[]>("list_clients_resume");
 export const getClient = (id: number) => invoke<Client>("get_client", { id });
 export const createClient = (client: NewClient) =>
   invoke<number>("create_client", { client });
@@ -61,6 +66,14 @@ export const listRecus = () => invoke<Recu[]>("list_recus");
 export const getRecu = (id: number) => invoke<RecuDetail>("get_recu", { id });
 export const genererRecu = (paiementId: number) =>
   invoke<Recu>("generer_recu", { paiementId });
+
+// --- Dépenses ---
+export const listDepenses = (noteId: number) =>
+  invoke<Depense[]>("list_depenses", { noteId });
+export const createDepense = (depense: NewDepense) =>
+  invoke<number>("create_depense", { depense });
+export const deleteDepense = (id: number) =>
+  invoke<void>("delete_depense", { id });
 
 // --- Stats ---
 export const resumeStats = () => invoke<ResumeStats>("resume_stats");

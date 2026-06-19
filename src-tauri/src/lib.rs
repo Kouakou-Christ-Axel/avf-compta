@@ -19,6 +19,7 @@ const DB_FILE: &str = "avf_compta.sqlite";
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             // Mise à jour automatique (desktop uniquement).
             #[cfg(desktop)]
@@ -36,6 +37,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::clients::list_clients,
+            commands::clients::list_clients_resume,
             commands::clients::get_client,
             commands::clients::create_client,
             commands::clients::update_client,
@@ -59,6 +61,9 @@ pub fn run() {
             commands::stats::resume_stats,
             commands::parametres::get_parametres,
             commands::parametres::save_parametres,
+            commands::depenses::list_depenses,
+            commands::depenses::create_depense,
+            commands::depenses::delete_depense,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

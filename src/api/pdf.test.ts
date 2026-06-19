@@ -9,6 +9,7 @@ const detail: NoteDetail = {
     reference: "26-06-0001",
     date_emission: "2026-06-18",
     statut: "emise",
+    echeance: null,
     cree_le: "2026-06-18",
   },
   lignes: [
@@ -22,6 +23,9 @@ const detail: NoteDetail = {
     },
   ],
   total: 100000,
+  depenses: [],
+  depenses_total: 0,
+  marge: 100000,
 };
 
 const params: Parametres = {

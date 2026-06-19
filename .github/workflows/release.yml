@@ -48,6 +48,6 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "avf-compta ${{ github.ref_name }}"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: --bundles msi,nsis

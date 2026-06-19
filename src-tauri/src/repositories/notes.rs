@@ -9,6 +9,7 @@ fn map_note(row: &Row) -> rusqlite::Result<NoteDeFrais> {
         reference: row.get("reference")?,
         date_emission: row.get("date_emission")?,
         statut: row.get("statut")?,
+        echeance: row.get("echeance")?,
         cree_le: row.get("cree_le")?,
     })
 }
@@ -43,7 +44,7 @@ pub fn list(conn: &Connection) -> AppResult<Vec<NoteDeFrais>> {
 /// restant), pour le tableau de bord des notes.
 pub fn list_resume(conn: &Connection) -> AppResult<Vec<NoteResume>> {
     let mut stmt = conn.prepare(
-        "SELECT n.id, n.client_id, n.reference, n.date_emission, n.statut,
+        "SELECT n.id, n.client_id, n.reference, n.date_emission, n.statut, n.echeance,
                 COALESCE((SELECT SUM(prix_snapshot * quantite)
                           FROM note_lignes l WHERE l.note_id = n.id), 0) AS total,
                 COALESCE((SELECT SUM(montant)
@@ -60,6 +61,7 @@ pub fn list_resume(conn: &Connection) -> AppResult<Vec<NoteResume>> {
             reference: row.get("reference")?,
             date_emission: row.get("date_emission")?,
             statut: row.get("statut")?,
+            echeance: row.get("echeance")?,
             total,
             paye,
             solde: total - paye,
@@ -89,10 +91,15 @@ pub fn detail(conn: &Connection, id: i64) -> AppResult<NoteDetail> {
     let note = get(conn, id)?;
     let lignes = lignes(conn, id)?;
     let total = total(conn, id)?;
+    let depenses = super::depenses::list_by_note(conn, id)?;
+    let depenses_total = super::depenses::total_by_note(conn, id)?;
     Ok(NoteDetail {
         note,
         lignes,
         total,
+        depenses,
+        depenses_total,
+        marge: total - depenses_total,
     })
 }
 
@@ -150,6 +157,7 @@ mod tests {
             &NewNote {
                 client_id: client,
                 date_emission: "2026-06-18".into(),
+                echeance: None,
                 lignes: vec![NewNoteLigne {
                     prestation_id: presta,
                     quantite: 3,

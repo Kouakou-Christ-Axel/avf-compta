@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  createDepense,
   createNote,
+  deleteDepense,
   enregistrerPaiement,
   genererRecu,
   getNote,
@@ -32,6 +34,35 @@ function aujourdhui(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function estEnRetard(n: NoteResume): boolean {
+  return n.echeance !== null && n.echeance < aujourdhui() && n.solde > 0;
+}
+
+function estEcheanceProche(n: NoteResume): boolean {
+  if (n.echeance === null || n.solde <= 0) return false;
+  const dans7Jours = new Date();
+  dans7Jours.setDate(dans7Jours.getDate() + 7);
+  const limite = dans7Jours.toISOString().slice(0, 10);
+  return n.echeance >= aujourdhui() && n.echeance <= limite;
+}
+
+async function notifierRetards(nb: number) {
+  try {
+    const { isPermissionGranted, requestPermission, sendNotification } =
+      await import("@tauri-apps/plugin-notification");
+    let granted = await isPermissionGranted();
+    if (!granted) granted = (await requestPermission()) === "granted";
+    if (granted) {
+      sendNotification({
+        title: "avf-compta",
+        body: `${nb} note(s) en retard de paiement`,
+      });
+    }
+  } catch {
+    /* ignore (dev/web) */
+  }
+}
+
 function badgeStatut(statut: string) {
   const payee = statut === "payee";
   return (
@@ -52,7 +83,10 @@ export function NotesPage() {
 
   // Formulaire de création.
   const [clientId, setClientId] = useState("");
+  const [echeance, setEcheance] = useState("");
   const [lignes, setLignes] = useState<NewNoteLigne[]>([]);
+
+  const rappelEnvoye = useRef(false);
 
   async function rechargerNotes() {
     setNotes(await listNotesResume());
@@ -70,6 +104,11 @@ export function NotesPage() {
         setClients(c);
         setPrestations(p);
         setParams(par);
+        const nbRetard = n.filter(estEnRetard).length;
+        if (nbRetard > 0 && !rappelEnvoye.current) {
+          rappelEnvoye.current = true;
+          notifierRetards(nbRetard);
+        }
       })
       .catch((e) => setErreur(String(e)));
   }, []);
@@ -103,9 +142,11 @@ export function NotesPage() {
       await createNote({
         client_id: Number(clientId),
         date_emission: aujourdhui(),
+        echeance: echeance || null,
         lignes,
       });
       setClientId("");
+      setEcheance("");
       setLignes([]);
       await rechargerNotes();
     } catch (err) {
@@ -117,6 +158,9 @@ export function NotesPage() {
     const p = prestations.find((pr) => pr.id === l.prestation_id);
     return acc + (p ? p.prix * l.quantite : 0);
   }, 0);
+
+  const nbRetard = notes.filter(estEnRetard).length;
+  const nbProche = notes.filter(estEcheanceProche).length;
 
   const noteSelectionnee = notes.find((n) => n.id === selection);
   const clientSelectionne =
@@ -132,6 +176,14 @@ export function NotesPage() {
           </p>
         </div>
       </header>
+
+      {(nbRetard > 0 || nbProche > 0) && (
+        <div className="rappel-banner" role="status">
+          ⚠️ {nbRetard > 0 && <>{nbRetard} note(s) en retard</>}
+          {nbRetard > 0 && nbProche > 0 && ", "}
+          {nbProche > 0 && <>{nbProche} à échéance proche</>}.
+        </div>
+      )}
 
       {erreur && <p className="erreur">{erreur}</p>}
 
@@ -151,6 +203,14 @@ export function NotesPage() {
                 </option>
               ))}
             </select>
+          </label>
+          <label>
+            <span>Échéance (facultatif)</span>
+            <input
+              type="date"
+              value={echeance}
+              onChange={(e) => setEcheance(e.target.value)}
+            />
           </label>
           <span className="aide ref-auto">
             La référence est générée automatiquement (AA-MM-NNNN).
@@ -218,6 +278,7 @@ export function NotesPage() {
               <th>Réf.</th>
               <th>Date</th>
               <th>Statut</th>
+              <th>Échéance</th>
               <th className="col-montant">Montant</th>
               <th className="col-montant">Payé</th>
               <th className="col-montant">Restant</th>
@@ -230,6 +291,12 @@ export function NotesPage() {
                 <td className="cell-fort">{n.reference ?? `#${n.id}`}</td>
                 <td>{n.date_emission}</td>
                 <td>{badgeStatut(n.statut)}</td>
+                <td>
+                  {n.echeance ?? "—"}
+                  {estEnRetard(n) && (
+                    <span className="badge badge-retard">En retard</span>
+                  )}
+                </td>
                 <td className="col-montant">{formatMontant(n.total)}</td>
                 <td className="col-montant">{formatMontant(n.paye)}</td>
                 <td className="col-montant">{formatMontant(n.solde)}</td>
@@ -240,7 +307,7 @@ export function NotesPage() {
             ))}
             {notes.length === 0 && (
               <tr>
-                <td colSpan={7} className="vide">
+                <td colSpan={8} className="vide">
                   Aucune note pour le moment.
                 </td>
               </tr>
@@ -293,6 +360,9 @@ function DetailNote({
   const [montant, setMontant] = useState("");
   const [methode, setMethode] = useState("");
   const [datePaiement, setDatePaiement] = useState(aujourdhui());
+  const [depLibelle, setDepLibelle] = useState("");
+  const [depMontant, setDepMontant] = useState("");
+  const [depDate, setDepDate] = useState(aujourdhui());
   const [erreur, setErreur] = useState<string | null>(null);
 
   async function recharger() {
@@ -358,6 +428,50 @@ function DetailNote({
       const detailRecu = await getRecu(recu.id);
       onRecu(detailRecu);
       showToast(`Reçu ${recu.numero} généré`);
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
+  async function ajouterDepense(e: React.FormEvent) {
+    e.preventDefault();
+    setErreur(null);
+    const m = parseMontant(depMontant);
+    if (!depLibelle.trim()) {
+      setErreur("Libellé de dépense requis");
+      return;
+    }
+    if (m === null || m <= 0) {
+      setErreur("Montant de dépense invalide");
+      return;
+    }
+    if (!depDate) {
+      setErreur("Date de dépense requise");
+      return;
+    }
+    try {
+      await createDepense({
+        note_id: noteId,
+        libelle: depLibelle.trim(),
+        montant: m,
+        date_depense: depDate,
+      });
+      setDepLibelle("");
+      setDepMontant("");
+      setDepDate(aujourdhui());
+      await recharger();
+      showToast("Dépense ajoutée");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
+  async function supprimerDepense(id: number) {
+    setErreur(null);
+    try {
+      await deleteDepense(id);
+      await recharger();
+      showToast("Dépense supprimée");
     } catch (err) {
       setErreur(String(err));
     }
@@ -467,6 +581,84 @@ function DetailNote({
               )}
             </tbody>
           </table>
+        </div>
+
+        <h4 className="sous-titre">Dépenses</h4>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Libellé</th>
+                <th className="col-montant">Montant</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.depenses.map((d) => (
+                <tr key={d.id}>
+                  <td>{d.date_depense}</td>
+                  <td>{d.libelle}</td>
+                  <td className="col-montant">{formatMontant(d.montant)}</td>
+                  <td className="cell-actions">
+                    <button
+                      className="btn-danger"
+                      onClick={() => supprimerDepense(d.id)}
+                    >
+                      Supprimer
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {detail.depenses.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="vide">
+                    Aucune dépense.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <form className="depenses-form" onSubmit={ajouterDepense}>
+          <input
+            placeholder="Libellé"
+            value={depLibelle}
+            onChange={(e) => setDepLibelle(e.target.value)}
+          />
+          <input
+            inputMode="numeric"
+            placeholder="Montant (FCFA)"
+            value={depMontant}
+            onChange={(e) => setDepMontant(e.target.value)}
+          />
+          <input
+            type="date"
+            aria-label="Date de la dépense"
+            value={depDate}
+            onChange={(e) => setDepDate(e.target.value)}
+          />
+          <button type="submit" className="btn-primary">
+            Ajouter
+          </button>
+        </form>
+
+        <div className="marge-box">
+          <div>
+            <span>Dépenses</span>
+            <strong>{formatMontant(detail.depenses_total)}</strong>
+          </div>
+          <div>
+            <span>Marge</span>
+            <strong
+              className={
+                detail.marge >= 0 ? "marge-positive" : "marge-negative"
+              }
+            >
+              {formatMontant(detail.marge)}
+            </strong>
+          </div>
         </div>
       </div>
     </div>

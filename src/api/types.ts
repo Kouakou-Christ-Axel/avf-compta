@@ -36,6 +36,7 @@ export interface NoteDeFrais {
   reference: string | null;
   date_emission: string;
   statut: string;
+  echeance: string | null;
   cree_le: string;
 }
 
@@ -52,6 +53,9 @@ export interface NoteDetail {
   note: NoteDeFrais;
   lignes: NoteLigne[];
   total: number;
+  depenses: Depense[];
+  depenses_total: number;
+  marge: number;
 }
 
 export interface NoteResume {
@@ -60,8 +64,35 @@ export interface NoteResume {
   reference: string | null;
   date_emission: string;
   statut: string;
+  echeance: string | null;
   total: number;
   paye: number;
+  solde: number;
+}
+
+export interface Depense {
+  id: number;
+  note_id: number;
+  libelle: string;
+  montant: number;
+  date_depense: string;
+  cree_le: string;
+}
+
+export interface NewDepense {
+  note_id: number;
+  libelle: string;
+  montant: number;
+  date_depense: string;
+}
+
+export interface ClientResume {
+  id: number;
+  nom: string;
+  email: string | null;
+  telephone: string | null;
+  total_facture: number;
+  total_paye: number;
   solde: number;
 }
 
@@ -73,6 +104,7 @@ export interface NewNoteLigne {
 export interface NewNote {
   client_id: number;
   date_emission: string;
+  echeance: string | null;
   lignes: NewNoteLigne[];
 }
 

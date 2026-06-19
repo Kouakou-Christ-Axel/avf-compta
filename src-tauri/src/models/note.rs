@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::Depense;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NoteDeFrais {
     pub id: i64,
@@ -7,6 +9,7 @@ pub struct NoteDeFrais {
     pub reference: Option<String>,
     pub date_emission: String,
     pub statut: String,
+    pub echeance: Option<String>,
     pub cree_le: String,
 }
 
@@ -23,12 +26,16 @@ pub struct NoteLigne {
     pub quantite: i64,
 }
 
-/// Note de frais avec ses lignes et son total calculé (francs CFA).
+/// Note de frais avec ses lignes, son total, ses dépenses et sa marge (francs).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NoteDetail {
     pub note: NoteDeFrais,
     pub lignes: Vec<NoteLigne>,
     pub total: i64,
+    pub depenses: Vec<Depense>,
+    pub depenses_total: i64,
+    /// Marge = total facturé − cumul des dépenses liées.
+    pub marge: i64,
 }
 
 /// Ligne du récapitulatif des notes : note + montants (facturé, payé, restant).
@@ -39,6 +46,7 @@ pub struct NoteResume {
     pub reference: Option<String>,
     pub date_emission: String,
     pub statut: String,
+    pub echeance: Option<String>,
     pub total: i64,
     pub paye: i64,
     pub solde: i64,
@@ -54,5 +62,6 @@ pub struct NewNoteLigne {
 pub struct NewNote {
     pub client_id: i64,
     pub date_emission: String,
+    pub echeance: Option<String>,
     pub lignes: Vec<NewNoteLigne>,
 }

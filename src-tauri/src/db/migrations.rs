@@ -84,6 +84,21 @@ pub fn migrations() -> Migrations<'static> {
         INSERT INTO parametres (id) VALUES (1);
         "#,
         ),
+        // v4 : échéance (date d'exigibilité) optionnelle sur les notes de frais.
+        M::up(r#"ALTER TABLE notes_de_frais ADD COLUMN echeance TEXT;"#),
+        // v5 : dépenses, chacune liée à une note de frais (calcul de marge).
+        M::up(
+            r#"
+        CREATE TABLE depenses (
+            id           INTEGER PRIMARY KEY,
+            note_id      INTEGER NOT NULL REFERENCES notes_de_frais(id) ON DELETE CASCADE,
+            libelle      TEXT NOT NULL,
+            montant      INTEGER NOT NULL,
+            date_depense TEXT NOT NULL,
+            cree_le      TEXT NOT NULL
+        );
+        "#,
+        ),
     ])
 }
 
