@@ -7,6 +7,14 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Ajouté
+
+- **Référence de note auto-générée** au format `AA-MM-NNNN` (séquence remise à
+  zéro chaque mois) — plus de saisie manuelle.
+- **Export PDF** des notes de frais et des reçus (via pdfmake).
+- **Profil du cabinet** (page Paramètres) : logo, nom, téléphone, email et
+  coordonnées de paiement, repris sur les notes/reçus imprimés et les PDF.
+
 ### Modifié
 
 - Devise passée à l'**euro → franc CFA (XOF)** : montants en francs entiers

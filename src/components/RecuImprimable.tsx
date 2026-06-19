@@ -1,22 +1,36 @@
 import { formatMontant } from "../api/money";
-import type { RecuDetail } from "../api/types";
+import { exportRecuPdf } from "../api/pdf";
+import type { Parametres, RecuDetail } from "../api/types";
 
-/** Aperçu d'un reçu, imprimable via le bouton (window.print + CSS @media print). */
+/** Aperçu d'un reçu, imprimable (window.print) ou exportable en PDF. */
 export function RecuImprimable({
   recu,
+  params,
   onClose,
 }: {
   recu: RecuDetail;
+  params?: Parametres | null;
   onClose: () => void;
 }) {
+  const cabinet = params?.cabinet_nom || "avf-compta";
+
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal">
         <div className="recu-print">
           <header className="recu-tete">
-            <div>
-              <h2 className="recu-cabinet">avf-compta</h2>
-              <p className="recu-sous">Cabinet comptable</p>
+            <div className="recu-cabinet-bloc">
+              {params?.logo && (
+                <img className="recu-logo" src={params.logo} alt="Logo" />
+              )}
+              <div>
+                <h2 className="recu-cabinet">{cabinet}</h2>
+                <p className="recu-sous">Cabinet comptable</p>
+                {params?.telephone && (
+                  <p className="recu-coord">{params.telephone}</p>
+                )}
+                {params?.email && <p className="recu-coord">{params.email}</p>}
+              </div>
             </div>
             <div className="recu-meta">
               <div className="recu-titre">REÇU DE PAIEMENT</div>
@@ -56,13 +70,22 @@ export function RecuImprimable({
             <strong>{formatMontant(recu.montant)}</strong>
           </section>
 
+          {params?.coordonnees_paiement && (
+            <section className="recu-bloc">
+              <h3>Coordonnées de paiement</h3>
+              <p className="recu-paiement">{params.coordonnees_paiement}</p>
+            </section>
+          )}
+
           <footer className="recu-pied">
-            Reçu pour solde de tout compte du montant indiqué. Merci de votre
-            confiance.
+            Reçu pour le montant indiqué. Merci de votre confiance.
           </footer>
         </div>
 
         <div className="modal-actions no-print">
+          <button onClick={() => exportRecuPdf(recu, params)}>
+            Exporter PDF
+          </button>
           <button className="btn-primary" onClick={() => window.print()}>
             Imprimer
           </button>

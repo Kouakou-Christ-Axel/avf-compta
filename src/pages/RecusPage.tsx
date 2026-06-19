@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
-import { getRecu, listRecus } from "../api/client";
-import type { Recu, RecuDetail } from "../api/types";
+import { getParametres, getRecu, listRecus } from "../api/client";
+import type { Parametres, Recu, RecuDetail } from "../api/types";
 import { RecuImprimable } from "../components/RecuImprimable";
 
 export function RecusPage() {
   const [recus, setRecus] = useState<Recu[]>([]);
+  const [params, setParams] = useState<Parametres | null>(null);
   const [apercu, setApercu] = useState<RecuDetail | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
   useEffect(() => {
-    listRecus()
-      .then(setRecus)
+    Promise.all([listRecus(), getParametres()])
+      .then(([r, p]) => {
+        setRecus(r);
+        setParams(p);
+      })
       .catch((e) => setErreur(String(e)));
   }, []);
 
@@ -67,7 +71,11 @@ export function RecusPage() {
       </div>
 
       {apercu && (
-        <RecuImprimable recu={apercu} onClose={() => setApercu(null)} />
+        <RecuImprimable
+          recu={apercu}
+          params={params}
+          onClose={() => setApercu(null)}
+        />
       )}
     </section>
   );

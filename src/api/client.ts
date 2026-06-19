@@ -10,6 +10,7 @@ import type {
   NoteDeFrais,
   NoteDetail,
   Paiement,
+  Parametres,
   Prestation,
   Recu,
   RecuDetail,
@@ -61,3 +62,8 @@ export const genererRecu = (paiementId: number) =>
 
 // --- Stats ---
 export const resumeStats = () => invoke<ResumeStats>("resume_stats");
+
+// --- Paramètres (profil du cabinet) ---
+export const getParametres = () => invoke<Parametres>("get_parametres");
+export const saveParametres = (parametres: Parametres) =>
+  invoke<void>("save_parametres", { parametres });
