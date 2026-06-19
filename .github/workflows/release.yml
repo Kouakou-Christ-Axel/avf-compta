@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Nécessaire pour créer la GitHub Release et y déposer les bundles.
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux (AppImage + .deb)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dépendances système Tauri (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Installation des dépendances JS
+        run: pnpm install --frozen-lockfile
+
+      - name: Synchronise la version depuis le tag
+        run: node scripts/set-version.mjs "${GITHUB_REF_NAME#v}"
+
+      - name: Build + publication de la release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "avf-compta ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          args: --bundles deb,appimage
