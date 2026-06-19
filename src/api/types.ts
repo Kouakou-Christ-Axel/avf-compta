@@ -54,6 +54,17 @@ export interface NoteDetail {
   total: number;
 }
 
+export interface NoteResume {
+  id: number;
+  client_id: number;
+  reference: string | null;
+  date_emission: string;
+  statut: string;
+  total: number;
+  paye: number;
+  solde: number;
+}
+
 export interface NewNoteLigne {
   prestation_id: number;
   quantite: number;

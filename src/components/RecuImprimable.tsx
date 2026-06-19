@@ -81,13 +81,6 @@ export function RecuImprimable({
             <strong>{formatMontant(recu.montant)}</strong>
           </section>
 
-          {params?.coordonnees_paiement && (
-            <section className="recu-bloc">
-              <h3>Coordonnées de paiement</h3>
-              <p className="recu-paiement">{params.coordonnees_paiement}</p>
-            </section>
-          )}
-
           <footer className="recu-pied">
             Reçu pour le montant indiqué. Merci de votre confiance.
           </footer>

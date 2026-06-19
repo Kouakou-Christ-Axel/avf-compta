@@ -66,8 +66,11 @@ export function noteDocDefinition(
               width: "auto",
               table: {
                 body: [
-                  ["Encaissé", formatMontant(solde.paye)],
-                  ["Reste dû", formatMontant(solde.solde)],
+                  ["Payé", formatMontant(solde.paye)],
+                  [
+                    { text: "Reste à payer", bold: true },
+                    { text: formatMontant(solde.solde), bold: true },
+                  ],
                 ],
               },
               layout: "noBorders",
@@ -209,7 +212,6 @@ export function recuDocDefinition(
         },
         layout: "noBorders",
       },
-      ...piedPaiement(params),
       {
         text: "Reçu pour le montant indiqué. Merci de votre confiance.",
         margin: [0, 18, 0, 0],

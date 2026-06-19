@@ -7,7 +7,7 @@ import {
   getParametres,
   getRecu,
   listClients,
-  listNotes,
+  listNotesResume,
   listPaiements,
   listPrestations,
   soldeNote,
@@ -17,8 +17,8 @@ import { exportNotePdf } from "../api/pdf";
 import type {
   Client,
   NewNoteLigne,
-  NoteDeFrais,
   NoteDetail,
+  NoteResume,
   Paiement,
   Parametres,
   Prestation,
@@ -42,7 +42,7 @@ function badgeStatut(statut: string) {
 }
 
 export function NotesPage() {
-  const [notes, setNotes] = useState<NoteDeFrais[]>([]);
+  const [notes, setNotes] = useState<NoteResume[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [prestations, setPrestations] = useState<Prestation[]>([]);
   const [params, setParams] = useState<Parametres | null>(null);
@@ -55,12 +55,12 @@ export function NotesPage() {
   const [lignes, setLignes] = useState<NewNoteLigne[]>([]);
 
   async function rechargerNotes() {
-    setNotes(await listNotes());
+    setNotes(await listNotesResume());
   }
 
   useEffect(() => {
     Promise.all([
-      listNotes(),
+      listNotesResume(),
       listClients(),
       listPrestations(),
       getParametres(),
@@ -218,6 +218,9 @@ export function NotesPage() {
               <th>Réf.</th>
               <th>Date</th>
               <th>Statut</th>
+              <th className="col-montant">Montant</th>
+              <th className="col-montant">Payé</th>
+              <th className="col-montant">Restant</th>
               <th></th>
             </tr>
           </thead>
@@ -227,6 +230,9 @@ export function NotesPage() {
                 <td className="cell-fort">{n.reference ?? `#${n.id}`}</td>
                 <td>{n.date_emission}</td>
                 <td>{badgeStatut(n.statut)}</td>
+                <td className="col-montant">{formatMontant(n.total)}</td>
+                <td className="col-montant">{formatMontant(n.paye)}</td>
+                <td className="col-montant">{formatMontant(n.solde)}</td>
                 <td className="cell-actions">
                   <button onClick={() => setSelection(n.id)}>Détail</button>
                 </td>
@@ -234,7 +240,7 @@ export function NotesPage() {
             ))}
             {notes.length === 0 && (
               <tr>
-                <td colSpan={4} className="vide">
+                <td colSpan={7} className="vide">
                   Aucune note pour le moment.
                 </td>
               </tr>
@@ -391,7 +397,7 @@ function DetailNote({
             <strong>{formatMontant(solde.paye)}</strong>
           </div>
           <div className="solde-du">
-            <span>Reste dû</span>
+            <span>Reste à payer</span>
             <strong>{formatMontant(solde.solde)}</strong>
           </div>
         </div>

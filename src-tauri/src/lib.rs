@@ -46,6 +46,7 @@ pub fn run() {
             commands::prestations::update_prestation,
             commands::prestations::delete_prestation,
             commands::notes::list_notes,
+            commands::notes::list_notes_resume,
             commands::notes::get_note,
             commands::notes::create_note,
             commands::notes::delete_note,

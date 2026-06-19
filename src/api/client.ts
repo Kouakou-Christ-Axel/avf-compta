@@ -9,6 +9,7 @@ import type {
   NewPrestation,
   NoteDeFrais,
   NoteDetail,
+  NoteResume,
   Paiement,
   Parametres,
   Prestation,
@@ -41,6 +42,7 @@ export const deletePrestation = (id: number) =>
 
 // --- Notes de frais ---
 export const listNotes = () => invoke<NoteDeFrais[]>("list_notes");
+export const listNotesResume = () => invoke<NoteResume[]>("list_notes_resume");
 export const getNote = (id: number) => invoke<NoteDetail>("get_note", { id });
 export const createNote = (note: NewNote) =>
   invoke<number>("create_note", { note });

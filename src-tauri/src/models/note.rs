@@ -31,6 +31,19 @@ pub struct NoteDetail {
     pub total: i64,
 }
 
+/// Ligne du récapitulatif des notes : note + montants (facturé, payé, restant).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NoteResume {
+    pub id: i64,
+    pub client_id: i64,
+    pub reference: Option<String>,
+    pub date_emission: String,
+    pub statut: String,
+    pub total: i64,
+    pub paye: i64,
+    pub solde: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewNoteLigne {
     pub prestation_id: i64,

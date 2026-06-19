@@ -7,7 +7,7 @@ pub mod recu;
 pub mod stats;
 
 pub use client::{Client, NewClient};
-pub use note::{NewNote, NoteDeFrais, NoteDetail, NoteLigne};
+pub use note::{NewNote, NoteDeFrais, NoteDetail, NoteLigne, NoteResume};
 pub use paiement::{NewPaiement, Paiement, SoldeNote};
 pub use parametres::Parametres;
 pub use prestation::{NewPrestation, Prestation};
