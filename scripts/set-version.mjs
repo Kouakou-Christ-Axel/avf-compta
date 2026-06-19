@@ -22,12 +22,14 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 function patch(relPath, regex, replacement) {
   const path = join(root, relPath);
   const content = readFileSync(path, "utf8");
-  const updated = content.replace(regex, replacement);
-  if (updated === content) {
-    console.error(`Aucune substitution de version dans ${relPath}`);
+  // On vérifie que le motif correspond (et non que le contenu change) : si la
+  // version du tag est identique au placeholder du dépôt, le remplacement est
+  // un no-op légitime et ne doit pas être traité comme une erreur.
+  if (!regex.test(content)) {
+    console.error(`Motif de version introuvable dans ${relPath}`);
     process.exit(1);
   }
-  writeFileSync(path, updated);
+  writeFileSync(path, content.replace(regex, replacement));
   console.log(`✓ ${relPath} -> ${version}`);
 }
 
