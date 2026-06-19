@@ -61,7 +61,6 @@ export interface NewNoteLigne {
 
 export interface NewNote {
   client_id: number;
-  reference: string | null;
   date_emission: string;
   lignes: NewNoteLigne[];
 }
@@ -117,4 +116,13 @@ export interface ResumeStats {
   total_facture: number;
   total_encaisse: number;
   total_impaye: number;
+}
+
+export interface Parametres {
+  cabinet_nom: string | null;
+  email: string | null;
+  telephone: string | null;
+  coordonnees_paiement: string | null;
+  /** Logo en data-URL base64 (image), facultatif. */
+  logo: string | null;
 }

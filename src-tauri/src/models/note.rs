@@ -40,7 +40,6 @@ pub struct NewNoteLigne {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewNote {
     pub client_id: i64,
-    pub reference: Option<String>,
     pub date_emission: String,
     pub lignes: Vec<NewNoteLigne>,
 }

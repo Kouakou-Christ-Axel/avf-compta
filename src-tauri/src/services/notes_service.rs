@@ -6,9 +6,32 @@ use rusqlite::Connection;
 /// Statut initial d'une note de frais.
 pub const STATUT_EMISE: &str = "emise";
 
+/// Extrait l'année (2 chiffres) et le mois d'une date « YYYY-MM-DD ».
+fn annee_mois(date: &str) -> AppResult<(&str, &str)> {
+    let bytes = date.as_bytes();
+    if date.len() < 7 || bytes[4] != b'-' {
+        return Err(AppError::Validation(format!("date invalide: {date}")));
+    }
+    Ok((&date[2..4], &date[5..7]))
+}
+
+/// Génère la référence séquentielle d'une note au format `AA-MM-NNNN`
+/// (séquence remise à zéro chaque mois).
+fn generer_reference(conn: &Connection, date_emission: &str) -> AppResult<String> {
+    let (aa, mm) = annee_mois(date_emission)?;
+    let prefix = format!("{aa}-{mm}-");
+    let deja: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM notes_de_frais WHERE reference LIKE ?1",
+        [format!("{prefix}%")],
+        |r| r.get(0),
+    )?;
+    Ok(format!("{prefix}{:04}", deja + 1))
+}
+
 /// Crée une note de frais et ses lignes de façon **atomique** : le libellé et
-/// le prix de chaque prestation sont figés (snapshot). Si une prestation est
-/// introuvable, toute la transaction est annulée (aucune note orpheline).
+/// le prix de chaque prestation sont figés (snapshot). La référence est
+/// générée automatiquement (`AA-MM-NNNN`). Si une prestation est introuvable,
+/// toute la transaction est annulée (aucune note orpheline).
 pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
     if n.lignes.is_empty() {
         return Err(AppError::Validation(
@@ -24,12 +47,13 @@ pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
     }
 
     let tx = conn.transaction()?;
+    let reference = generer_reference(&tx, &n.date_emission)?;
     tx.execute(
         "INSERT INTO notes_de_frais (client_id, reference, date_emission, statut, cree_le)
          VALUES (?1, ?2, ?3, ?4, ?5)",
         rusqlite::params![
             n.client_id,
-            n.reference,
+            reference,
             n.date_emission,
             STATUT_EMISE,
             crate::repositories::now()
@@ -85,13 +109,37 @@ mod tests {
     fn new_note(client_id: i64, prestation_id: i64, qte: i64) -> NewNote {
         NewNote {
             client_id,
-            reference: Some("N-001".into()),
             date_emission: "2026-06-18".into(),
             lignes: vec![NewNoteLigne {
                 prestation_id,
                 quantite: qte,
             }],
         }
+    }
+
+    #[test]
+    fn reference_is_generated_sequentially_per_month() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let id1 = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        let id2 = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        assert_eq!(
+            notes::get(&conn, id1).unwrap().reference.unwrap(),
+            "26-06-0001"
+        );
+        assert_eq!(
+            notes::get(&conn, id2).unwrap().reference.unwrap(),
+            "26-06-0002"
+        );
+
+        // Un autre mois repart à 0001.
+        let mut autre = new_note(client, presta, 1);
+        autre.date_emission = "2026-07-02".into();
+        let id3 = create_note(&mut conn, &autre).unwrap();
+        assert_eq!(
+            notes::get(&conn, id3).unwrap().reference.unwrap(),
+            "26-07-0001"
+        );
     }
 
     #[test]

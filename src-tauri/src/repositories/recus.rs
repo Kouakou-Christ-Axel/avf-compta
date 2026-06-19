@@ -104,7 +104,6 @@ mod tests {
             &mut conn,
             &NewNote {
                 client_id: client,
-                reference: Some("N-1".into()),
                 date_emission: "2026-06-18".into(),
                 lignes: vec![NewNoteLigne {
                     prestation_id: presta,
@@ -130,7 +129,7 @@ mod tests {
         assert_eq!(d.montant, 50_000);
         assert_eq!(d.client_nom, "Acme");
         assert_eq!(d.client_telephone.as_deref(), Some("0102030405"));
-        assert_eq!(d.note_reference.as_deref(), Some("N-1"));
+        assert_eq!(d.note_reference.as_deref(), Some("26-06-0001"));
         assert_eq!(d.methode.as_deref(), Some("espèces"));
     }
 

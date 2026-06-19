@@ -1,6 +1,7 @@
 pub mod clients;
 pub mod notes;
 pub mod paiements;
+pub mod parametres;
 pub mod prestations;
 pub mod recus;
 pub mod stats;

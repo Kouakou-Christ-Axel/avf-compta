@@ -90,7 +90,6 @@ mod tests {
             conn,
             &NewNote {
                 client_id: client,
-                reference: None,
                 date_emission: "2026-06-18".into(),
                 lignes: vec![NewNoteLigne {
                     prestation_id: presta,

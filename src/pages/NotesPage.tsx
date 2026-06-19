@@ -4,6 +4,7 @@ import {
   enregistrerPaiement,
   genererRecu,
   getNote,
+  getParametres,
   getRecu,
   listClients,
   listNotes,
@@ -12,12 +13,14 @@ import {
   soldeNote,
 } from "../api/client";
 import { formatMontant, parseMontant } from "../api/money";
+import { exportNotePdf } from "../api/pdf";
 import type {
   Client,
   NewNoteLigne,
   NoteDeFrais,
   NoteDetail,
   Paiement,
+  Parametres,
   Prestation,
   RecuDetail,
   SoldeNote,
@@ -42,13 +45,13 @@ export function NotesPage() {
   const [notes, setNotes] = useState<NoteDeFrais[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [prestations, setPrestations] = useState<Prestation[]>([]);
+  const [params, setParams] = useState<Parametres | null>(null);
   const [selection, setSelection] = useState<number | null>(null);
   const [recuAImprimer, setRecuAImprimer] = useState<RecuDetail | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
   // Formulaire de création.
   const [clientId, setClientId] = useState("");
-  const [reference, setReference] = useState("");
   const [lignes, setLignes] = useState<NewNoteLigne[]>([]);
 
   async function rechargerNotes() {
@@ -56,11 +59,17 @@ export function NotesPage() {
   }
 
   useEffect(() => {
-    Promise.all([listNotes(), listClients(), listPrestations()])
-      .then(([n, c, p]) => {
+    Promise.all([
+      listNotes(),
+      listClients(),
+      listPrestations(),
+      getParametres(),
+    ])
+      .then(([n, c, p, par]) => {
         setNotes(n);
         setClients(c);
         setPrestations(p);
+        setParams(par);
       })
       .catch((e) => setErreur(String(e)));
   }, []);
@@ -93,12 +102,10 @@ export function NotesPage() {
     try {
       await createNote({
         client_id: Number(clientId),
-        reference: reference || null,
         date_emission: aujourdhui(),
         lignes,
       });
       setClientId("");
-      setReference("");
       setLignes([]);
       await rechargerNotes();
     } catch (err) {
@@ -110,6 +117,10 @@ export function NotesPage() {
     const p = prestations.find((pr) => pr.id === l.prestation_id);
     return acc + (p ? p.prix * l.quantite : 0);
   }, 0);
+
+  const noteSelectionnee = notes.find((n) => n.id === selection);
+  const clientSelectionne =
+    clients.find((c) => c.id === noteSelectionnee?.client_id)?.nom ?? "Client";
 
   return (
     <section className="page">
@@ -141,14 +152,9 @@ export function NotesPage() {
               ))}
             </select>
           </label>
-          <label>
-            <span>Référence</span>
-            <input
-              placeholder="Ex : N-2026-001"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-            />
-          </label>
+          <span className="aide ref-auto">
+            La référence est générée automatiquement (AA-MM-NNNN).
+          </span>
         </div>
 
         <p className="aide">Cliquez sur une prestation pour l'ajouter :</p>
@@ -240,6 +246,8 @@ export function NotesPage() {
       {selection !== null && (
         <DetailNote
           noteId={selection}
+          clientNom={clientSelectionne}
+          params={params}
           onFermer={() => setSelection(null)}
           onChangement={rechargerNotes}
           onRecu={setRecuAImprimer}
@@ -249,6 +257,7 @@ export function NotesPage() {
       {recuAImprimer && (
         <RecuImprimable
           recu={recuAImprimer}
+          params={params}
           onClose={() => setRecuAImprimer(null)}
         />
       )}
@@ -258,11 +267,15 @@ export function NotesPage() {
 
 function DetailNote({
   noteId,
+  clientNom,
+  params,
   onFermer,
   onChangement,
   onRecu,
 }: {
   noteId: number;
+  clientNom: string;
+  params: Parametres | null;
   onFermer: () => void;
   onChangement: () => void;
   onRecu: (recu: RecuDetail) => void;
@@ -365,6 +378,14 @@ function DetailNote({
             <span>Reste dû</span>
             <strong>{formatMontant(solde.solde)}</strong>
           </div>
+        </div>
+
+        <div className="detail-actions">
+          <button
+            onClick={() => exportNotePdf(detail, clientNom, solde, params)}
+          >
+            Exporter la note en PDF
+          </button>
         </div>
 
         {!solde.payee ? (

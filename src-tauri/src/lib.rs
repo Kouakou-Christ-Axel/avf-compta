@@ -48,6 +48,8 @@ pub fn run() {
             commands::recus::get_recu,
             commands::recus::generer_recu,
             commands::stats::resume_stats,
+            commands::parametres::get_parametres,
+            commands::parametres::save_parametres,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -69,6 +69,21 @@ pub fn migrations() -> Migrations<'static> {
         ALTER TABLE paiements    RENAME COLUMN montant_cents        TO montant;
         "#,
         ),
+        // v3 : profil du cabinet (logo + coordonnées) affiché sur les documents.
+        // Ligne unique (id = 1).
+        M::up(
+            r#"
+        CREATE TABLE parametres (
+            id                   INTEGER PRIMARY KEY CHECK (id = 1),
+            cabinet_nom          TEXT,
+            email                TEXT,
+            telephone            TEXT,
+            coordonnees_paiement TEXT,
+            logo                 TEXT
+        );
+        INSERT INTO parametres (id) VALUES (1);
+        "#,
+        ),
     ])
 }
 

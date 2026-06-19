@@ -5,6 +5,7 @@ import { PrestationsPage } from "./pages/PrestationsPage";
 import { NotesPage } from "./pages/NotesPage";
 import { RecusPage } from "./pages/RecusPage";
 import { StatsPage } from "./pages/StatsPage";
+import { ParametresPage } from "./pages/ParametresPage";
 import { ToastProvider } from "./components/ToastProvider";
 
 const ONGLETS = [
@@ -13,6 +14,7 @@ const ONGLETS = [
   { id: "prestations", label: "Prestations", icone: "◇" },
   { id: "notes", label: "Notes de frais", icone: "▤" },
   { id: "recus", label: "Reçus", icone: "▣" },
+  { id: "parametres", label: "Paramètres", icone: "⚙" },
 ] as const;
 
 type OngletId = (typeof ONGLETS)[number]["id"];
@@ -51,6 +53,7 @@ function App() {
           {onglet === "prestations" && <PrestationsPage />}
           {onglet === "notes" && <NotesPage />}
           {onglet === "recus" && <RecusPage />}
+          {onglet === "parametres" && <ParametresPage />}
         </main>
       </div>
     </ToastProvider>
