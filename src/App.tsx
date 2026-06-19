@@ -1,50 +1,50 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import { ClientsPage } from "./pages/ClientsPage";
+import { PrestationsPage } from "./pages/PrestationsPage";
+import { NotesPage } from "./pages/NotesPage";
+import { RecusPage } from "./pages/RecusPage";
+import { StatsPage } from "./pages/StatsPage";
+
+const ONGLETS = [
+  { id: "stats", label: "Tableau de bord" },
+  { id: "clients", label: "Clients" },
+  { id: "prestations", label: "Prestations" },
+  { id: "notes", label: "Notes de frais" },
+  { id: "recus", label: "Reçus" },
+] as const;
+
+type OngletId = (typeof ONGLETS)[number]["id"];
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const [onglet, setOnglet] = useState<OngletId>("stats");
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app">
+      <header className="topbar">
+        <h1 className="brand">avf-compta</h1>
+      </header>
+      <div className="layout">
+        <nav className="sidebar">
+          {ONGLETS.map((o) => (
+            <button
+              key={o.id}
+              className={o.id === onglet ? "nav-item actif" : "nav-item"}
+              onClick={() => setOnglet(o.id)}
+            >
+              {o.label}
+            </button>
+          ))}
+        </nav>
+        <main className="content">
+          {onglet === "stats" && <StatsPage />}
+          {onglet === "clients" && <ClientsPage />}
+          {onglet === "prestations" && <PrestationsPage />}
+          {onglet === "notes" && <NotesPage />}
+          {onglet === "recus" && <RecusPage />}
+        </main>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    </div>
   );
 }
 
