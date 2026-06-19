@@ -12,6 +12,7 @@ import type {
   Paiement,
   Prestation,
   Recu,
+  RecuDetail,
   ResumeStats,
   SoldeNote,
 } from "./types";
@@ -54,6 +55,7 @@ export const enregistrerPaiement = (paiement: NewPaiement) =>
 
 // --- Reçus ---
 export const listRecus = () => invoke<Recu[]>("list_recus");
+export const getRecu = (id: number) => invoke<RecuDetail>("get_recu", { id });
 export const genererRecu = (paiementId: number) =>
   invoke<Recu>("generer_recu", { paiementId });
 

@@ -1,5 +1,5 @@
-// Types miroir des DTO Rust. Tous les montants sont en **centimes** (entiers) ;
-// le formatage en euros se fait uniquement à l'affichage via `formatEuros`.
+// Types miroir des DTO Rust. Tous les montants sont en **francs CFA entiers
+// (XOF)** ; le formatage se fait à l'affichage via `formatMontant`.
 
 export interface Client {
   id: number;
@@ -20,14 +20,14 @@ export interface NewClient {
 export interface Prestation {
   id: number;
   libelle: string;
-  prix_cents: number;
+  prix: number;
   actif: boolean;
   cree_le: string;
 }
 
 export interface NewPrestation {
   libelle: string;
-  prix_cents: number;
+  prix: number;
 }
 
 export interface NoteDeFrais {
@@ -44,14 +44,14 @@ export interface NoteLigne {
   note_id: number;
   prestation_id: number;
   libelle_snapshot: string;
-  prix_cents_snapshot: number;
+  prix_snapshot: number;
   quantite: number;
 }
 
 export interface NoteDetail {
   note: NoteDeFrais;
   lignes: NoteLigne[];
-  total_cents: number;
+  total: number;
 }
 
 export interface NewNoteLigne {
@@ -69,7 +69,7 @@ export interface NewNote {
 export interface Paiement {
   id: number;
   note_id: number;
-  montant_cents: number;
+  montant: number;
   date_paiement: string;
   methode: string | null;
   cree_le: string;
@@ -77,16 +77,16 @@ export interface Paiement {
 
 export interface NewPaiement {
   note_id: number;
-  montant_cents: number;
+  montant: number;
   date_paiement: string;
   methode: string | null;
 }
 
 export interface SoldeNote {
   note_id: number;
-  total_cents: number;
-  paye_cents: number;
-  solde_cents: number;
+  total: number;
+  paye: number;
+  solde: number;
   payee: boolean;
 }
 
@@ -97,10 +97,24 @@ export interface Recu {
   emis_le: string;
 }
 
+export interface RecuDetail {
+  id: number;
+  numero: string;
+  emis_le: string;
+  montant: number;
+  date_paiement: string;
+  methode: string | null;
+  note_id: number;
+  note_reference: string | null;
+  client_nom: string;
+  client_email: string | null;
+  client_telephone: string | null;
+}
+
 export interface ResumeStats {
   nb_clients: number;
   nb_notes: number;
-  total_facture_cents: number;
-  total_encaisse_cents: number;
-  total_impaye_cents: number;
+  total_facture: number;
+  total_encaisse: number;
+  total_impaye: number;
 }

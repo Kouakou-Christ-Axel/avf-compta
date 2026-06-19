@@ -19,7 +19,7 @@ fn map_ligne(row: &Row) -> rusqlite::Result<NoteLigne> {
         note_id: row.get("note_id")?,
         prestation_id: row.get("prestation_id")?,
         libelle_snapshot: row.get("libelle_snapshot")?,
-        prix_cents_snapshot: row.get("prix_cents_snapshot")?,
+        prix_snapshot: row.get("prix_snapshot")?,
         quantite: row.get("quantite")?,
     })
 }
@@ -45,10 +45,10 @@ pub fn lignes(conn: &Connection, note_id: i64) -> AppResult<Vec<NoteLigne>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-/// Total facturé d'une note (Σ prix_snapshot × quantité), en centimes.
-pub fn total_cents(conn: &Connection, note_id: i64) -> AppResult<i64> {
+/// Total facturé d'une note (Σ prix_snapshot × quantité), en francs CFA.
+pub fn total(conn: &Connection, note_id: i64) -> AppResult<i64> {
     let total: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(prix_cents_snapshot * quantite), 0)
+        "SELECT COALESCE(SUM(prix_snapshot * quantite), 0)
          FROM note_lignes WHERE note_id = ?1",
         [note_id],
         |r| r.get(0),
@@ -59,11 +59,11 @@ pub fn total_cents(conn: &Connection, note_id: i64) -> AppResult<i64> {
 pub fn detail(conn: &Connection, id: i64) -> AppResult<NoteDetail> {
     let note = get(conn, id)?;
     let lignes = lignes(conn, id)?;
-    let total_cents = total_cents(conn, id)?;
+    let total = total(conn, id)?;
     Ok(NoteDetail {
         note,
         lignes,
-        total_cents,
+        total,
     })
 }
 

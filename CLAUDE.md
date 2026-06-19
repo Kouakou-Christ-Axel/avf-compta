@@ -56,8 +56,9 @@ renders and calls commands.
 
 Layered so business logic is testable without the Tauri runtime:
 
-- `money.rs` — `Money(i64)` newtype; **all amounts are integer cents, never
-  floats**. Parsing/formatting is decimal-exact (French `1 234,56 €`).
+- `money.rs` — `Money(i64)` newtype; the currency is **franc CFA (XOF)**, which
+  has **no minor unit**, so amounts are **whole integer francs, never floats**.
+  Formatting is French-grouped (`150 000 FCFA`); parsing rejects decimals.
 - `db/` — `open()`/`open_in_memory()` set `PRAGMA foreign_keys = ON` (per
   connection!) and run migrations; `db/migrations.rs` holds the schema.
 - `models/` — serde DTOs shared with the frontend.
@@ -96,7 +97,8 @@ expects exactly this.
 
 - TypeScript is **strict** with `noUnusedLocals`/`noUnusedParameters` — unused
   symbols fail the build. Rust clippy runs with `-D warnings`.
-- Keep amounts as integer cents end to end; format only at the display edge.
+- Keep amounts as whole integer francs (XOF) end to end; format only at the
+  display edge (`formatMontant` in TS mirrors Rust `Money::Display`).
 - App identifier: `com.kouax.avf-compta`.
 
 ## CI/CD & versioning

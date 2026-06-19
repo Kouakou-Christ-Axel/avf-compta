@@ -9,16 +9,16 @@ describe("StatsPage", () => {
     const stats: ResumeStats = {
       nb_clients: 3,
       nb_notes: 2,
-      total_facture_cents: 123456,
-      total_encaisse_cents: 100000,
-      total_impaye_cents: 23456,
+      total_facture: 1250000,
+      total_encaisse: 1000000,
+      total_impaye: 250000,
     };
     mockIPC((cmd) => (cmd === "resume_stats" ? stats : undefined));
 
     render(<StatsPage />);
 
-    expect(await screen.findByText("1 234,56 €")).toBeInTheDocument();
+    expect(await screen.findByText("1 250 000 FCFA")).toBeInTheDocument();
     expect(screen.getByText("Total impayé")).toBeInTheDocument();
-    expect(screen.getByText("234,56 €")).toBeInTheDocument();
+    expect(screen.getByText("250 000 FCFA")).toBeInTheDocument();
   });
 });

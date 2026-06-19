@@ -7,7 +7,21 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Modifié
+
+- Devise passée à l'**euro → franc CFA (XOF)** : montants en francs entiers
+  (pas de sous-unité), affichage « 150 000 FCFA » côté Rust et React.
+
 ### Ajouté
+
+- **Reçu imprimable** : aperçu détaillé (cabinet, client, note, montant) et
+  impression via le navigateur (commande `get_recu`, jointure dédiée).
+- **Copier au clic** sur l'email et le téléphone d'un client, avec un toast
+  « Copié ».
+- Interface retravaillée : barre latérale, cartes du tableau de bord, badges
+  de statut, fenêtres modales, notifications toast.
+
+### Ajouté (v1 initiale)
 
 - Domaine comptable complet (backend Rust + SQLite) : clients, prestations,
   notes de frais composées de prestations (prix figés), paiements avec refus

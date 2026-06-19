@@ -42,9 +42,9 @@ pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
         let p = prestations::get(&tx, l.prestation_id)?;
         tx.execute(
             "INSERT INTO note_lignes
-                (note_id, prestation_id, libelle_snapshot, prix_cents_snapshot, quantite)
+                (note_id, prestation_id, libelle_snapshot, prix_snapshot, quantite)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![note_id, p.id, p.libelle, p.prix_cents, l.quantite],
+            rusqlite::params![note_id, p.id, p.libelle, p.prix, l.quantite],
         )?;
     }
 
@@ -75,7 +75,7 @@ mod tests {
             conn,
             &NewPrestation {
                 libelle: "Conseil".into(),
-                prix_cents: 10_000,
+                prix: 10_000,
             },
         )
         .unwrap();
@@ -99,7 +99,7 @@ mod tests {
         let mut conn = open_in_memory().unwrap();
         let (client, presta) = seed(&conn);
         let id = create_note(&mut conn, &new_note(client, presta, 3)).unwrap();
-        assert_eq!(notes::total_cents(&conn, id).unwrap(), 30_000);
+        assert_eq!(notes::total(&conn, id).unwrap(), 30_000);
     }
 
     #[test]
@@ -109,10 +109,10 @@ mod tests {
         let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
         // Le prix de la prestation change après coup…
         let mut p = prestations::get(&conn, presta).unwrap();
-        p.prix_cents = 99_999;
+        p.prix = 99_999;
         prestations::update(&conn, &p).unwrap();
         // …mais le total de la note historique reste inchangé.
-        assert_eq!(notes::total_cents(&conn, id).unwrap(), 10_000);
+        assert_eq!(notes::total(&conn, id).unwrap(), 10_000);
     }
 
     #[test]

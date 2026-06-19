@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 pub struct Prestation {
     pub id: i64,
     pub libelle: String,
-    pub prix_cents: i64,
+    /// Prix en francs CFA entiers (XOF).
+    pub prix: i64,
     pub actif: bool,
     pub cree_le: String,
 }
@@ -12,5 +13,5 @@ pub struct Prestation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewPrestation {
     pub libelle: String,
-    pub prix_cents: i64,
+    pub prix: i64,
 }

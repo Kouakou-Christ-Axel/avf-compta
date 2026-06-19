@@ -39,7 +39,7 @@ mod tests {
             conn,
             &NewPrestation {
                 libelle: "Conseil".into(),
-                prix_cents: 10_000,
+                prix: 10_000,
             },
         )
         .unwrap();
@@ -60,7 +60,7 @@ mod tests {
             conn,
             &NewPaiement {
                 note_id: note,
-                montant_cents: 10_000,
+                montant: 10_000,
                 date_paiement: "2026-06-18".into(),
                 methode: None,
             },

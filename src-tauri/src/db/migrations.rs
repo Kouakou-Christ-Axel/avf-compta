@@ -2,9 +2,13 @@ use rusqlite_migration::{Migrations, M};
 
 /// Migrations ordonnées du schéma. `rusqlite_migration` suit la version dans
 /// `PRAGMA user_version`, donc l'exécution est idempotente.
+///
+/// Les montants sont stockés en **francs CFA entiers** (XOF n'a pas de
+/// sous-unité). Les colonnes/champs ne portent donc pas de suffixe « cents ».
 pub fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(
-        r#"
+    Migrations::new(vec![
+        M::up(
+            r#"
         CREATE TABLE clients (
             id        INTEGER PRIMARY KEY,
             nom       TEXT NOT NULL,
@@ -56,7 +60,16 @@ pub fn migrations() -> Migrations<'static> {
             emis_le     TEXT NOT NULL
         );
         "#,
-    )])
+        ),
+        // v2 : devise XOF (francs entiers) — on retire le suffixe « cents ».
+        M::up(
+            r#"
+        ALTER TABLE prestations  RENAME COLUMN prix_cents          TO prix;
+        ALTER TABLE note_lignes  RENAME COLUMN prix_cents_snapshot TO prix_snapshot;
+        ALTER TABLE paiements    RENAME COLUMN montant_cents        TO montant;
+        "#,
+        ),
+    ])
 }
 
 #[cfg(test)]
