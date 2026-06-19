@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { ClientsPage } from "./ClientsPage";
+import { ToastProvider } from "../components/ToastProvider";
 import type { Client } from "../api/types";
 
 describe("ClientsPage", () => {
@@ -18,7 +19,11 @@ describe("ClientsPage", () => {
     ];
     mockIPC((cmd) => (cmd === "list_clients" ? clients : undefined));
 
-    render(<ClientsPage />);
+    render(
+      <ToastProvider>
+        <ClientsPage />
+      </ToastProvider>,
+    );
 
     expect(await screen.findByText("Acme SARL")).toBeInTheDocument();
     expect(screen.getByText("contact@acme.fr")).toBeInTheDocument();

@@ -48,7 +48,7 @@ describe("client API", () => {
     const calls = captureIPC();
     const paiement = {
       note_id: 1,
-      montant_cents: 5000,
+      montant: 5000,
       date_paiement: "2026-06-18",
       methode: null,
     };

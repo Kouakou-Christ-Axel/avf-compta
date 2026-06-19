@@ -18,17 +18,17 @@ pub struct NoteLigne {
     /// Libellé figé au moment de l'ajout (insensible aux modifications futures
     /// de la prestation).
     pub libelle_snapshot: String,
-    /// Prix unitaire figé en centimes.
-    pub prix_cents_snapshot: i64,
+    /// Prix unitaire figé, en francs CFA entiers.
+    pub prix_snapshot: i64,
     pub quantite: i64,
 }
 
-/// Note de frais avec ses lignes et son total calculé (centimes).
+/// Note de frais avec ses lignes et son total calculé (francs CFA).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NoteDetail {
     pub note: NoteDeFrais,
     pub lignes: Vec<NoteLigne>,
-    pub total_cents: i64,
+    pub total: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

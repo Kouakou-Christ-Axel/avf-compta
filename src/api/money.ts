@@ -1,39 +1,27 @@
+/** Symbole de la devise (franc CFA ouest-africain). */
+export const DEVISE = "FCFA";
+
 /**
- * Formate un montant en centimes vers une chaîne en euros à la française
- * (« 1 234,56 € »). Reproduit le `Display` Rust de `Money`.
+ * Formate un montant en francs CFA entiers vers une chaîne à la française
+ * (« 150 000 FCFA »). Reproduit le `Display` Rust de `Money`.
  */
-export function formatEuros(cents: number): string {
-  const negative = cents < 0;
-  const abs = Math.abs(Math.trunc(cents));
-  const euros = Math.floor(abs / 100);
-  const c = abs % 100;
-
-  const grouped = euros.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  const cc = c.toString().padStart(2, "0");
-
-  return `${negative ? "-" : ""}${grouped},${cc} €`;
+export function formatMontant(francs: number): string {
+  const negative = francs < 0;
+  const abs = Math.abs(Math.trunc(francs));
+  const grouped = abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `${negative ? "-" : ""}${grouped} ${DEVISE}`;
 }
 
 /**
- * Analyse une saisie utilisateur (« 1 234,56 », « 1234.5 », « 12 ») en
- * centimes, sans flottant, avec arrondi au centime le plus proche. Renvoie
- * `null` si l'entrée est invalide.
+ * Analyse une saisie utilisateur (« 150 000 », « 150000 ») en francs CFA
+ * entiers. Les espaces sont ignorés ; les décimales ne sont pas acceptées car
+ * le franc CFA n'a pas de sous-unité. Renvoie `null` si l'entrée est invalide.
  */
-export function parseEuros(input: string): number | null {
-  const cleaned = input.replace(/\s/g, "").replace(",", ".");
+export function parseMontant(input: string): number | null {
+  const cleaned = input.replace(/\s/g, "");
   const neg = cleaned.startsWith("-");
   const body = cleaned.replace(/^[+-]/, "");
-
-  const parts = body.split(".");
-  if (parts.length > 2) return null;
-  const [intPart = "", fracPart = ""] = parts;
-  if (intPart === "" && fracPart === "") return null;
-  if (!/^\d*$/.test(intPart) || !/^\d*$/.test(fracPart)) return null;
-
-  const intVal = intPart === "" ? 0 : Number(intPart);
-  const d = (i: number) => (fracPart[i] ? Number(fracPart[i]) : 0);
-  let cents = intVal * 100 + d(0) * 10 + d(1);
-  if (d(2) >= 5) cents += 1;
-
-  return neg ? -cents : cents;
+  if (body === "" || !/^\d+$/.test(body)) return null;
+  const value = Number(body);
+  return neg ? -value : value;
 }

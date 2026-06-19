@@ -10,38 +10,38 @@ pub const STATUT_EMISE: &str = "emise";
 pub fn solde(conn: &Connection, note_id: i64) -> AppResult<SoldeNote> {
     // Garantit que la note existe (sinon NotFound).
     notes::get(conn, note_id)?;
-    let total_cents = notes::total_cents(conn, note_id)?;
-    let paye_cents = paiements::total_paye_cents(conn, note_id)?;
-    let solde_cents = total_cents - paye_cents;
+    let total = notes::total(conn, note_id)?;
+    let paye = paiements::total_paye(conn, note_id)?;
+    let solde = total - paye;
     Ok(SoldeNote {
         note_id,
-        total_cents,
-        paye_cents,
-        solde_cents,
-        payee: solde_cents <= 0 && total_cents > 0,
+        total,
+        paye,
+        solde,
+        payee: solde <= 0 && total > 0,
     })
 }
 
 /// Enregistre un paiement contre une note, en refusant tout sur-paiement, puis
 /// met à jour le statut de la note (payée si le solde atteint zéro).
 pub fn enregistrer(conn: &Connection, p: &NewPaiement) -> AppResult<i64> {
-    if p.montant_cents <= 0 {
+    if p.montant <= 0 {
         return Err(AppError::Validation(
             "le montant du paiement doit être positif".into(),
         ));
     }
     let s = solde(conn, p.note_id)?;
-    if p.montant_cents > s.solde_cents {
+    if p.montant > s.solde {
         return Err(AppError::Validation(format!(
-            "sur-paiement refusé: solde dû {} centimes, paiement {} centimes",
-            s.solde_cents, p.montant_cents
+            "sur-paiement refusé: solde dû {} FCFA, paiement {} FCFA",
+            s.solde, p.montant
         )));
     }
 
     let id = paiements::insert(
         conn,
         p.note_id,
-        p.montant_cents,
+        p.montant,
         &p.date_paiement,
         p.methode.as_deref(),
     )?;
@@ -82,7 +82,7 @@ mod tests {
             conn,
             &NewPrestation {
                 libelle: "Conseil".into(),
-                prix_cents: 10_000,
+                prix: 10_000,
             },
         )
         .unwrap();
@@ -104,7 +104,7 @@ mod tests {
     fn paiement(note_id: i64, montant: i64) -> NewPaiement {
         NewPaiement {
             note_id,
-            montant_cents: montant,
+            montant,
             date_paiement: "2026-06-18".into(),
             methode: Some("virement".into()),
         }
@@ -116,8 +116,8 @@ mod tests {
         let note = note_de_300(&mut conn);
         enregistrer(&conn, &paiement(note, 10_000)).unwrap();
         let s = solde(&conn, note).unwrap();
-        assert_eq!(s.paye_cents, 10_000);
-        assert_eq!(s.solde_cents, 20_000);
+        assert_eq!(s.paye, 10_000);
+        assert_eq!(s.solde, 20_000);
         assert!(!s.payee);
         assert_eq!(notes::get(&conn, note).unwrap().statut, STATUT_EMISE);
     }
@@ -129,7 +129,7 @@ mod tests {
         enregistrer(&conn, &paiement(note, 20_000)).unwrap();
         enregistrer(&conn, &paiement(note, 10_000)).unwrap();
         let s = solde(&conn, note).unwrap();
-        assert_eq!(s.solde_cents, 0);
+        assert_eq!(s.solde, 0);
         assert!(s.payee);
         assert_eq!(notes::get(&conn, note).unwrap().statut, STATUT_PAYEE);
     }
@@ -143,7 +143,7 @@ mod tests {
             Err(AppError::Validation(_))
         ));
         // Aucun paiement enregistré.
-        assert_eq!(solde(&conn, note).unwrap().paye_cents, 0);
+        assert_eq!(solde(&conn, note).unwrap().paye, 0);
     }
 
     #[test]

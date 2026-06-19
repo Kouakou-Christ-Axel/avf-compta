@@ -4,7 +4,7 @@ import {
   deletePrestation,
   listPrestations,
 } from "../api/client";
-import { formatEuros, parseEuros } from "../api/money";
+import { formatMontant, parseMontant } from "../api/money";
 import type { Prestation } from "../api/types";
 
 export function PrestationsPage() {
@@ -24,13 +24,13 @@ export function PrestationsPage() {
   async function ajouter(e: React.FormEvent) {
     e.preventDefault();
     setErreur(null);
-    const cents = parseEuros(prix);
-    if (cents === null || cents < 0) {
+    const montant = parseMontant(prix);
+    if (montant === null || montant < 0) {
       setErreur("Prix invalide");
       return;
     }
     try {
-      await createPrestation({ libelle, prix_cents: cents });
+      await createPrestation({ libelle, prix: montant });
       setLibelle("");
       setPrix("");
       await recharger();
@@ -50,53 +50,79 @@ export function PrestationsPage() {
   }
 
   return (
-    <section>
-      <h2>Prestations</h2>
+    <section className="page">
+      <header className="page-tete">
+        <div>
+          <h2>Prestations</h2>
+          <p className="page-sous">
+            {prestations.length} prestation{prestations.length > 1 ? "s" : ""}
+          </p>
+        </div>
+      </header>
+
       {erreur && <p className="erreur">{erreur}</p>}
 
-      <form className="form-inline" onSubmit={ajouter}>
-        <input
-          aria-label="Libellé"
-          placeholder="Libellé"
-          value={libelle}
-          onChange={(e) => setLibelle(e.target.value)}
-          required
-        />
-        <input
-          aria-label="Prix"
-          placeholder="Prix (ex: 150,00)"
-          value={prix}
-          onChange={(e) => setPrix(e.target.value)}
-          required
-        />
-        <button type="submit">Ajouter</button>
+      <form className="carte-form" onSubmit={ajouter}>
+        <div className="champs">
+          <label>
+            <span>Libellé</span>
+            <input
+              placeholder="Ex : Bilan annuel"
+              value={libelle}
+              onChange={(e) => setLibelle(e.target.value)}
+              required
+            />
+          </label>
+          <label>
+            <span>Prix (FCFA)</span>
+            <input
+              inputMode="numeric"
+              placeholder="Ex : 150 000"
+              value={prix}
+              onChange={(e) => setPrix(e.target.value)}
+              required
+            />
+          </label>
+        </div>
+        <button type="submit" className="btn-primary">
+          Ajouter la prestation
+        </button>
       </form>
 
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Libellé</th>
-            <th>Prix</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {prestations.map((p) => (
-            <tr key={p.id}>
-              <td>{p.libelle}</td>
-              <td>{formatEuros(p.prix_cents)}</td>
-              <td>
-                <button onClick={() => supprimer(p.id)}>Supprimer</button>
-              </td>
-            </tr>
-          ))}
-          {prestations.length === 0 && (
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
             <tr>
-              <td colSpan={3}>Aucune prestation.</td>
+              <th>Libellé</th>
+              <th className="col-montant">Prix</th>
+              <th></th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {prestations.map((p) => (
+              <tr key={p.id}>
+                <td className="cell-fort">{p.libelle}</td>
+                <td className="col-montant">{formatMontant(p.prix)}</td>
+                <td className="cell-actions">
+                  <button
+                    className="btn-danger"
+                    onClick={() => supprimer(p.id)}
+                  >
+                    Supprimer
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {prestations.length === 0 && (
+              <tr>
+                <td colSpan={3} className="vide">
+                  Aucune prestation pour le moment.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

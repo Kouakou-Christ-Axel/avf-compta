@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createClient, deleteClient, listClients } from "../api/client";
 import type { Client } from "../api/types";
+import { CopyText } from "../components/CopyText";
 
 export function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -47,60 +48,88 @@ export function ClientsPage() {
   }
 
   return (
-    <section>
-      <h2>Clients</h2>
+    <section className="page">
+      <header className="page-tete">
+        <div>
+          <h2>Clients</h2>
+          <p className="page-sous">
+            {clients.length} client{clients.length > 1 ? "s" : ""}
+          </p>
+        </div>
+      </header>
+
       {erreur && <p className="erreur">{erreur}</p>}
 
-      <form className="form-inline" onSubmit={ajouter}>
-        <input
-          aria-label="Nom"
-          placeholder="Nom"
-          value={nom}
-          onChange={(e) => setNom(e.target.value)}
-          required
-        />
-        <input
-          aria-label="Email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          aria-label="Téléphone"
-          placeholder="Téléphone"
-          value={telephone}
-          onChange={(e) => setTelephone(e.target.value)}
-        />
-        <button type="submit">Ajouter</button>
+      <form className="carte-form" onSubmit={ajouter}>
+        <div className="champs">
+          <label>
+            <span>Nom</span>
+            <input
+              placeholder="Nom du client"
+              value={nom}
+              onChange={(e) => setNom(e.target.value)}
+              required
+            />
+          </label>
+          <label>
+            <span>Email</span>
+            <input
+              type="email"
+              placeholder="email@exemple.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
+          <label>
+            <span>Téléphone</span>
+            <input
+              placeholder="01 02 03 04 05"
+              value={telephone}
+              onChange={(e) => setTelephone(e.target.value)}
+            />
+          </label>
+        </div>
+        <button type="submit" className="btn-primary">
+          Ajouter le client
+        </button>
       </form>
 
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Nom</th>
-            <th>Email</th>
-            <th>Téléphone</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {clients.map((c) => (
-            <tr key={c.id}>
-              <td>{c.nom}</td>
-              <td>{c.email ?? "—"}</td>
-              <td>{c.telephone ?? "—"}</td>
-              <td>
-                <button onClick={() => supprimer(c.id)}>Supprimer</button>
-              </td>
-            </tr>
-          ))}
-          {clients.length === 0 && (
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
             <tr>
-              <td colSpan={4}>Aucun client.</td>
+              <th>Nom</th>
+              <th>Email</th>
+              <th>Téléphone</th>
+              <th></th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {clients.map((c) => (
+              <tr key={c.id}>
+                <td className="cell-fort">{c.nom}</td>
+                <td>{c.email ? <CopyText value={c.email} /> : "—"}</td>
+                <td>{c.telephone ? <CopyText value={c.telephone} /> : "—"}</td>
+                <td className="cell-actions">
+                  <button
+                    className="btn-danger"
+                    onClick={() => supprimer(c.id)}
+                  >
+                    Supprimer
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {clients.length === 0 && (
+              <tr>
+                <td colSpan={4} className="vide">
+                  Aucun client pour le moment.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

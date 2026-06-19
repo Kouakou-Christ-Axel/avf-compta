@@ -6,7 +6,7 @@ fn map_row(row: &Row) -> rusqlite::Result<Prestation> {
     Ok(Prestation {
         id: row.get("id")?,
         libelle: row.get("libelle")?,
-        prix_cents: row.get("prix_cents")?,
+        prix: row.get("prix")?,
         actif: row.get::<_, i64>("actif")? != 0,
         cree_le: row.get("cree_le")?,
     })
@@ -16,13 +16,13 @@ pub fn create(conn: &Connection, p: &NewPrestation) -> AppResult<i64> {
     if p.libelle.trim().is_empty() {
         return Err(AppError::Validation("le libellé est requis".into()));
     }
-    if p.prix_cents < 0 {
+    if p.prix < 0 {
         return Err(AppError::Validation("le prix ne peut être négatif".into()));
     }
     conn.execute(
-        "INSERT INTO prestations (libelle, prix_cents, actif, cree_le)
+        "INSERT INTO prestations (libelle, prix, actif, cree_le)
          VALUES (?1, ?2, 1, ?3)",
-        rusqlite::params![p.libelle, p.prix_cents, super::now()],
+        rusqlite::params![p.libelle, p.prix, super::now()],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -42,12 +42,12 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Prestation>> {
 }
 
 pub fn update(conn: &Connection, p: &Prestation) -> AppResult<()> {
-    if p.prix_cents < 0 {
+    if p.prix < 0 {
         return Err(AppError::Validation("le prix ne peut être négatif".into()));
     }
     let n = conn.execute(
-        "UPDATE prestations SET libelle=?1, prix_cents=?2, actif=?3 WHERE id=?4",
-        rusqlite::params![p.libelle, p.prix_cents, p.actif as i64, p.id],
+        "UPDATE prestations SET libelle=?1, prix=?2, actif=?3 WHERE id=?4",
+        rusqlite::params![p.libelle, p.prix, p.actif as i64, p.id],
     )?;
     if n == 0 {
         return Err(AppError::NotFound(format!("prestation {}", p.id)));
@@ -71,7 +71,7 @@ mod tests {
     fn sample() -> NewPrestation {
         NewPrestation {
             libelle: "Bilan annuel".into(),
-            prix_cents: 150_000,
+            prix: 150_000,
         }
     }
 
@@ -80,7 +80,7 @@ mod tests {
         let conn = open_in_memory().unwrap();
         let id = create(&conn, &sample()).unwrap();
         let p = get(&conn, id).unwrap();
-        assert_eq!(p.prix_cents, 150_000);
+        assert_eq!(p.prix, 150_000);
         assert!(p.actif);
     }
 
@@ -89,7 +89,7 @@ mod tests {
         let conn = open_in_memory().unwrap();
         let p = NewPrestation {
             libelle: "X".into(),
-            prix_cents: -1,
+            prix: -1,
         };
         assert!(matches!(create(&conn, &p), Err(AppError::Validation(_))));
     }
@@ -99,11 +99,11 @@ mod tests {
         let conn = open_in_memory().unwrap();
         let id = create(&conn, &sample()).unwrap();
         let mut p = get(&conn, id).unwrap();
-        p.prix_cents = 200_000;
+        p.prix = 200_000;
         p.actif = false;
         update(&conn, &p).unwrap();
         let p = get(&conn, id).unwrap();
-        assert_eq!(p.prix_cents, 200_000);
+        assert_eq!(p.prix, 200_000);
         assert!(!p.actif);
         delete(&conn, id).unwrap();
         assert!(matches!(get(&conn, id), Err(AppError::NotFound(_))));

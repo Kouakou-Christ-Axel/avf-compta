@@ -4,13 +4,14 @@ import {
   enregistrerPaiement,
   genererRecu,
   getNote,
+  getRecu,
   listClients,
   listNotes,
   listPaiements,
   listPrestations,
   soldeNote,
 } from "../api/client";
-import { formatEuros, parseEuros } from "../api/money";
+import { formatMontant, parseMontant } from "../api/money";
 import type {
   Client,
   NewNoteLigne,
@@ -18,11 +19,23 @@ import type {
   NoteDetail,
   Paiement,
   Prestation,
+  RecuDetail,
   SoldeNote,
 } from "../api/types";
+import { RecuImprimable } from "../components/RecuImprimable";
+import { useToast } from "../components/toast-context";
 
 function aujourdhui(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function badgeStatut(statut: string) {
+  const payee = statut === "payee";
+  return (
+    <span className={payee ? "badge badge-ok" : "badge badge-attente"}>
+      {payee ? "Payée" : "En attente"}
+    </span>
+  );
 }
 
 export function NotesPage() {
@@ -30,6 +43,7 @@ export function NotesPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [prestations, setPrestations] = useState<Prestation[]>([]);
   const [selection, setSelection] = useState<number | null>(null);
+  const [recuAImprimer, setRecuAImprimer] = useState<RecuDetail | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
   // Formulaire de création.
@@ -65,6 +79,10 @@ export function NotesPage() {
     });
   }
 
+  function retirerLigne(prestationId: number) {
+    setLignes((ls) => ls.filter((l) => l.prestation_id !== prestationId));
+  }
+
   async function creer(e: React.FormEvent) {
     e.preventDefault();
     setErreur(null);
@@ -90,43 +108,65 @@ export function NotesPage() {
 
   const totalApercu = lignes.reduce((acc, l) => {
     const p = prestations.find((pr) => pr.id === l.prestation_id);
-    return acc + (p ? p.prix_cents * l.quantite : 0);
+    return acc + (p ? p.prix * l.quantite : 0);
   }, 0);
 
   return (
-    <section>
-      <h2>Notes de frais</h2>
+    <section className="page">
+      <header className="page-tete">
+        <div>
+          <h2>Notes de frais</h2>
+          <p className="page-sous">
+            {notes.length} note{notes.length > 1 ? "s" : ""}
+          </p>
+        </div>
+      </header>
+
       {erreur && <p className="erreur">{erreur}</p>}
 
-      <form className="form-bloc" onSubmit={creer}>
-        <h3>Nouvelle note</h3>
-        <div className="form-inline">
-          <select
-            aria-label="Client"
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-          >
-            <option value="">— Client —</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nom}
-              </option>
-            ))}
-          </select>
-          <input
-            aria-label="Référence"
-            placeholder="Référence"
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-          />
+      <form className="carte-form" onSubmit={creer}>
+        <h3 className="form-titre">Nouvelle note</h3>
+        <div className="champs">
+          <label>
+            <span>Client</span>
+            <select
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+            >
+              <option value="">— Sélectionner —</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nom}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Référence</span>
+            <input
+              placeholder="Ex : N-2026-001"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+            />
+          </label>
         </div>
 
-        <div className="form-inline">
+        <p className="aide">Cliquez sur une prestation pour l'ajouter :</p>
+        <div className="puces">
           {prestations.map((p) => (
-            <button type="button" key={p.id} onClick={() => ajouterLigne(p.id)}>
-              + {p.libelle} ({formatEuros(p.prix_cents)})
+            <button
+              type="button"
+              key={p.id}
+              className="puce"
+              onClick={() => ajouterLigne(p.id)}
+            >
+              + {p.libelle}
+              <span className="puce-prix">{formatMontant(p.prix)}</span>
             </button>
           ))}
+          {prestations.length === 0 && (
+            <span className="aide">Aucune prestation : créez-en d'abord.</span>
+          )}
         </div>
 
         {lignes.length > 0 && (
@@ -135,52 +175,81 @@ export function NotesPage() {
               const p = prestations.find((pr) => pr.id === l.prestation_id);
               return (
                 <li key={l.prestation_id}>
-                  {p?.libelle} × {l.quantite} ={" "}
-                  {formatEuros((p?.prix_cents ?? 0) * l.quantite)}
+                  <span>
+                    {p?.libelle} × {l.quantite}
+                  </span>
+                  <span className="ligne-droite">
+                    {formatMontant((p?.prix ?? 0) * l.quantite)}
+                    <button
+                      type="button"
+                      className="x"
+                      onClick={() => retirerLigne(l.prestation_id)}
+                      aria-label="Retirer"
+                    >
+                      ✕
+                    </button>
+                  </span>
                 </li>
               );
             })}
           </ul>
         )}
-        <p>
-          <strong>Total : {formatEuros(totalApercu)}</strong>
-        </p>
-        <button type="submit">Créer la note</button>
+
+        <div className="form-pied">
+          <span className="total-apercu">
+            Total : <strong>{formatMontant(totalApercu)}</strong>
+          </span>
+          <button type="submit" className="btn-primary">
+            Créer la note
+          </button>
+        </div>
       </form>
 
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Réf.</th>
-            <th>Date</th>
-            <th>Statut</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {notes.map((n) => (
-            <tr key={n.id}>
-              <td>{n.reference ?? `#${n.id}`}</td>
-              <td>{n.date_emission}</td>
-              <td>{n.statut}</td>
-              <td>
-                <button onClick={() => setSelection(n.id)}>Détail</button>
-              </td>
-            </tr>
-          ))}
-          {notes.length === 0 && (
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
             <tr>
-              <td colSpan={4}>Aucune note.</td>
+              <th>Réf.</th>
+              <th>Date</th>
+              <th>Statut</th>
+              <th></th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {notes.map((n) => (
+              <tr key={n.id}>
+                <td className="cell-fort">{n.reference ?? `#${n.id}`}</td>
+                <td>{n.date_emission}</td>
+                <td>{badgeStatut(n.statut)}</td>
+                <td className="cell-actions">
+                  <button onClick={() => setSelection(n.id)}>Détail</button>
+                </td>
+              </tr>
+            ))}
+            {notes.length === 0 && (
+              <tr>
+                <td colSpan={4} className="vide">
+                  Aucune note pour le moment.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {selection !== null && (
         <DetailNote
           noteId={selection}
           onFermer={() => setSelection(null)}
           onChangement={rechargerNotes}
+          onRecu={setRecuAImprimer}
+        />
+      )}
+
+      {recuAImprimer && (
+        <RecuImprimable
+          recu={recuAImprimer}
+          onClose={() => setRecuAImprimer(null)}
         />
       )}
     </section>
@@ -191,15 +260,19 @@ function DetailNote({
   noteId,
   onFermer,
   onChangement,
+  onRecu,
 }: {
   noteId: number;
   onFermer: () => void;
   onChangement: () => void;
+  onRecu: (recu: RecuDetail) => void;
 }) {
+  const { showToast } = useToast();
   const [detail, setDetail] = useState<NoteDetail | null>(null);
   const [solde, setSolde] = useState<SoldeNote | null>(null);
   const [paiements, setPaiements] = useState<Paiement[]>([]);
   const [montant, setMontant] = useState("");
+  const [methode, setMethode] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
 
   async function recharger() {
@@ -221,31 +294,35 @@ function DetailNote({
   async function payer(e: React.FormEvent) {
     e.preventDefault();
     setErreur(null);
-    const cents = parseEuros(montant);
-    if (cents === null || cents <= 0) {
+    const m = parseMontant(montant);
+    if (m === null || m <= 0) {
       setErreur("Montant invalide");
       return;
     }
     try {
       await enregistrerPaiement({
         note_id: noteId,
-        montant_cents: cents,
+        montant: m,
         date_paiement: aujourdhui(),
-        methode: null,
+        methode: methode || null,
       });
       setMontant("");
+      setMethode("");
       await recharger();
       onChangement();
+      showToast("Paiement enregistré");
     } catch (err) {
       setErreur(String(err));
     }
   }
 
-  async function recu(paiementId: number) {
+  async function imprimerRecu(paiementId: number) {
     setErreur(null);
     try {
-      const r = await genererRecu(paiementId);
-      alert(`Reçu généré : ${r.numero}`);
+      const recu = await genererRecu(paiementId);
+      const detailRecu = await getRecu(recu.id);
+      onRecu(detailRecu);
+      showToast(`Reçu ${recu.numero} généré`);
     } catch (err) {
       setErreur(String(err));
     }
@@ -254,67 +331,99 @@ function DetailNote({
   if (!detail || !solde) return null;
 
   return (
-    <div className="detail">
-      <div className="detail-entete">
-        <h3>Note {detail.note.reference ?? `#${detail.note.id}`}</h3>
-        <button onClick={onFermer}>Fermer</button>
-      </div>
-      {erreur && <p className="erreur">{erreur}</p>}
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="modal">
+        <div className="modal-tete">
+          <h3>Note {detail.note.reference ?? `#${detail.note.id}`}</h3>
+          <button className="x" onClick={onFermer} aria-label="Fermer">
+            ✕
+          </button>
+        </div>
+        {erreur && <p className="erreur">{erreur}</p>}
 
-      <ul className="lignes">
-        {detail.lignes.map((l) => (
-          <li key={l.id}>
-            {l.libelle_snapshot} × {l.quantite} ={" "}
-            {formatEuros(l.prix_cents_snapshot * l.quantite)}
-          </li>
-        ))}
-      </ul>
-
-      <p>Total facturé : {formatEuros(solde.total_cents)}</p>
-      <p>Encaissé : {formatEuros(solde.paye_cents)}</p>
-      <p>
-        <strong>Solde dû : {formatEuros(solde.solde_cents)}</strong>{" "}
-        {solde.payee && <span className="badge">Payée</span>}
-      </p>
-
-      {!solde.payee && (
-        <form className="form-inline" onSubmit={payer}>
-          <input
-            aria-label="Montant du paiement"
-            placeholder="Montant (ex: 50,00)"
-            value={montant}
-            onChange={(e) => setMontant(e.target.value)}
-          />
-          <button type="submit">Enregistrer le paiement</button>
-        </form>
-      )}
-
-      <h4>Paiements</h4>
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Montant</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {paiements.map((p) => (
-            <tr key={p.id}>
-              <td>{p.date_paiement}</td>
-              <td>{formatEuros(p.montant_cents)}</td>
-              <td>
-                <button onClick={() => recu(p.id)}>Reçu</button>
-              </td>
-            </tr>
+        <ul className="lignes">
+          {detail.lignes.map((l) => (
+            <li key={l.id}>
+              <span>
+                {l.libelle_snapshot} × {l.quantite}
+              </span>
+              <span>{formatMontant(l.prix_snapshot * l.quantite)}</span>
+            </li>
           ))}
-          {paiements.length === 0 && (
-            <tr>
-              <td colSpan={3}>Aucun paiement.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+        </ul>
+
+        <div className="solde">
+          <div>
+            <span>Facturé</span>
+            <strong>{formatMontant(solde.total)}</strong>
+          </div>
+          <div>
+            <span>Encaissé</span>
+            <strong>{formatMontant(solde.paye)}</strong>
+          </div>
+          <div className="solde-du">
+            <span>Reste dû</span>
+            <strong>{formatMontant(solde.solde)}</strong>
+          </div>
+        </div>
+
+        {!solde.payee ? (
+          <form className="paiement-form" onSubmit={payer}>
+            <input
+              inputMode="numeric"
+              placeholder="Montant (FCFA)"
+              value={montant}
+              onChange={(e) => setMontant(e.target.value)}
+            />
+            <input
+              placeholder="Mode (espèces, virement…)"
+              value={methode}
+              onChange={(e) => setMethode(e.target.value)}
+            />
+            <button type="submit" className="btn-primary">
+              Encaisser
+            </button>
+          </form>
+        ) : (
+          <p className="paye-info">
+            <span className="badge badge-ok">Payée</span> Cette note est
+            entièrement réglée.
+          </p>
+        )}
+
+        <h4 className="sous-titre">Paiements</h4>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th className="col-montant">Montant</th>
+                <th>Mode</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {paiements.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.date_paiement}</td>
+                  <td className="col-montant">{formatMontant(p.montant)}</td>
+                  <td>{p.methode ?? "—"}</td>
+                  <td className="cell-actions">
+                    <button onClick={() => imprimerRecu(p.id)}>Reçu</button>
+                  </td>
+                </tr>
+              ))}
+              {paiements.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="vide">
+                    Aucun paiement.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

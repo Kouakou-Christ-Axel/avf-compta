@@ -45,6 +45,7 @@ pub fn run() {
             commands::paiements::solde_note,
             commands::paiements::enregistrer_paiement,
             commands::recus::list_recus,
+            commands::recus::get_recu,
             commands::recus::generer_recu,
             commands::stats::resume_stats,
         ])
