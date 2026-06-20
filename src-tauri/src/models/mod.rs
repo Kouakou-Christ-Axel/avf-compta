@@ -8,7 +8,7 @@ pub mod recu;
 pub mod stats;
 
 pub use client::{Client, ClientResume, NewClient};
-pub use depense::{Depense, NewDepense};
+pub use depense::{Depense, DepenseLigne, NewDepense};
 pub use note::{NewNote, NoteDeFrais, NoteDetail, NoteLigne, NoteResume};
 pub use paiement::{NewPaiement, Paiement, SoldeNote};
 pub use parametres::Parametres;

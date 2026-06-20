@@ -30,6 +30,7 @@ const detail: NoteDetail = {
 
 const params: Parametres = {
   cabinet_nom: "Cabinet AVF",
+  sous_titre: "Expert-comptable",
   email: "avf@exemple.ci",
   telephone: "0102030405",
   coordonnees_paiement: "Wave +225 0700000000",
@@ -66,10 +67,21 @@ describe("recuDocDefinition", () => {
       client_nom: "Acme SARL",
       client_email: null,
       client_telephone: null,
+      lignes: [
+        {
+          id: 1,
+          note_id: 1,
+          prestation_id: 1,
+          libelle_snapshot: "Conseil",
+          prix_snapshot: 100000,
+          quantite: 1,
+        },
+      ],
     };
     const t = texte(recuDocDefinition(recu, params));
     expect(t).toContain("RECU-0001");
     expect(t).toContain("100 000 FCFA");
+    expect(t).toContain("Conseil");
     // Les coordonnées de paiement ne figurent pas sur le reçu.
     expect(t).not.toContain("Wave +225 0700000000");
   });

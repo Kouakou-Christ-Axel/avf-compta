@@ -17,6 +17,10 @@ pub enum AppError {
     /// Erreur de la base de données SQLite.
     #[error("base de données: {0}")]
     Database(String),
+
+    /// Erreur d'entrée/sortie (ex: écriture de fichier).
+    #[error("fichier: {0}")]
+    Io(String),
 }
 
 impl From<rusqlite::Error> for AppError {

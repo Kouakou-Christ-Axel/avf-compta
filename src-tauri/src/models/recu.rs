@@ -22,4 +22,6 @@ pub struct RecuDetail {
     pub client_nom: String,
     pub client_email: Option<String>,
     pub client_telephone: Option<String>,
+    /// Prestations (lignes) de la note réglée.
+    pub lignes: Vec<super::NoteLigne>,
 }

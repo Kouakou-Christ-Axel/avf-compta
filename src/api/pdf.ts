@@ -11,10 +11,10 @@ const COULEUR = "#1d4ed8";
 /** En-tête « cabinet » (logo + nom + coordonnées) à gauche du document. */
 function enteteCabinet(params?: Parametres | null): Content {
   const nom = params?.cabinet_nom || "avf-compta";
-  const lignes: Content[] = [
-    { text: nom, style: "marque" },
-    { text: "Cabinet comptable", color: "#64748b" },
-  ];
+  const lignes: Content[] = [{ text: nom, style: "marque" }];
+  if (params?.sous_titre) {
+    lignes.push({ text: params.sous_titre, color: "#64748b" });
+  }
   if (params?.telephone) lignes.push({ text: params.telephone, fontSize: 9 });
   if (params?.email) lignes.push({ text: params.email, fontSize: 9 });
 
@@ -149,13 +149,45 @@ export function noteDocDefinition(
   };
 }
 
-/** Définition pdfmake d'un reçu de paiement. */
+export type FormatPage = "A4" | "A5";
+
+/** Définition pdfmake d'un reçu de paiement (format A4 ou A5). */
 export function recuDocDefinition(
   recu: RecuDetail,
   params?: Parametres | null,
+  format: FormatPage = "A4",
 ): TDocumentDefinitions {
+  const marge = format === "A5" ? 28 : 40;
+  const lignesRecu: TableCell[][] = recu.lignes.map((l) => [
+    l.libelle_snapshot,
+    { text: String(l.quantite), alignment: "center" },
+    { text: formatMontant(l.prix_snapshot * l.quantite), alignment: "right" },
+  ]);
+  const blocPrestations: Content[] =
+    lignesRecu.length > 0
+      ? [
+          {
+            margin: [0, 16, 0, 0],
+            table: {
+              headerRows: 1,
+              widths: ["*", "auto", "auto"],
+              body: [
+                [
+                  { text: "Prestation", style: "th" },
+                  { text: "Qté", style: "th", alignment: "center" },
+                  { text: "Montant", style: "th", alignment: "right" },
+                ],
+                ...lignesRecu,
+              ],
+            },
+            layout: "lightHorizontalLines",
+          },
+        ]
+      : [];
   return {
     info: { title: `Reçu ${recu.numero}` },
+    pageSize: format,
+    pageMargins: [marge, marge, marge, marge],
     content: [
       {
         columns: [
@@ -193,6 +225,7 @@ export function recuDocDefinition(
         },
         layout: "lightHorizontalLines",
       },
+      ...blocPrestations,
       {
         margin: [0, 18, 0, 0],
         table: {
@@ -228,13 +261,21 @@ export function recuDocDefinition(
         color: "#64748b",
         characterSpacing: 1,
       },
+      th: { bold: true, fontSize: 10, color: "#334155" },
     },
     defaultStyle: { fontSize: 11 },
   };
 }
 
-/** Charge pdfmake (et ses polices) à la demande, puis télécharge le PDF. */
-async function telecharger(def: TDocumentDefinitions, fichier: string) {
+/**
+ * Génère le PDF puis l'enregistre via une vraie boîte « Enregistrer sous »
+ * (dialogue Tauri + écriture par le backend). Renvoie `true` si l'utilisateur
+ * a enregistré, `false` s'il a annulé. Lève en cas d'erreur réelle.
+ */
+async function enregistrer(
+  def: TDocumentDefinitions,
+  fichier: string,
+): Promise<boolean> {
   const [{ default: pdfMake }, fonts] = await Promise.all([
     import("pdfmake/build/pdfmake"),
     import("pdfmake/build/vfs_fonts"),
@@ -251,7 +292,22 @@ async function telecharger(def: TDocumentDefinitions, fichier: string) {
       pdfMake.vfs = vfs;
     }
   }
-  pdfMake.createPdf(def).download(fichier);
+
+  const blob: Blob = await new Promise((resolve) =>
+    pdfMake.createPdf(def).getBlob((b) => resolve(b)),
+  );
+  const octets = Array.from(new Uint8Array(await blob.arrayBuffer()));
+
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const chemin = await save({
+    defaultPath: fichier,
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (!chemin) return false; // annulé
+
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("enregistrer_fichier", { chemin, contenu: octets });
+  return true;
 }
 
 export function exportNotePdf(
@@ -259,14 +315,22 @@ export function exportNotePdf(
   clientNom: string,
   solde?: SoldeNote | null,
   params?: Parametres | null,
-) {
+): Promise<boolean> {
   const ref = detail.note.reference ?? `note-${detail.note.id}`;
-  return telecharger(
+  return enregistrer(
     noteDocDefinition(detail, clientNom, solde, params),
     `${ref}.pdf`,
   );
 }
 
-export function exportRecuPdf(recu: RecuDetail, params?: Parametres | null) {
-  return telecharger(recuDocDefinition(recu, params), `${recu.numero}.pdf`);
+export function exportRecuPdf(
+  recu: RecuDetail,
+  params?: Parametres | null,
+  format: FormatPage = "A4",
+): Promise<boolean> {
+  const suffixe = format === "A5" ? "-A5" : "";
+  return enregistrer(
+    recuDocDefinition(recu, params, format),
+    `${recu.numero}${suffixe}.pdf`,
+  );
 }

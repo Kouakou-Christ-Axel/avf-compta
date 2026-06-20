@@ -1,9 +1,9 @@
 import { formatMontant } from "../api/money";
-import { exportRecuPdf } from "../api/pdf";
+import { exportRecuPdf, type FormatPage } from "../api/pdf";
 import type { Parametres, RecuDetail } from "../api/types";
 import { useToast } from "./toast-context";
 
-/** Aperçu d'un reçu, imprimable (window.print) ou exportable en PDF. */
+/** Aperçu d'un reçu, imprimable (window.print) ou exportable en PDF (A4/A5). */
 export function RecuImprimable({
   recu,
   params,
@@ -16,10 +16,10 @@ export function RecuImprimable({
   const { showToast } = useToast();
   const cabinet = params?.cabinet_nom || "avf-compta";
 
-  async function exporter() {
+  async function exporter(format: FormatPage) {
     try {
-      await exportRecuPdf(recu, params);
-      showToast("PDF généré");
+      const ok = await exportRecuPdf(recu, params, format);
+      if (ok) showToast(`PDF (${format}) enregistré`);
     } catch (e) {
       showToast(`Échec de l'export : ${e}`);
     }
@@ -36,7 +36,9 @@ export function RecuImprimable({
               )}
               <div>
                 <h2 className="recu-cabinet">{cabinet}</h2>
-                <p className="recu-sous">Cabinet comptable</p>
+                {params?.sous_titre && (
+                  <p className="recu-sous">{params.sous_titre}</p>
+                )}
                 {params?.telephone && (
                   <p className="recu-coord">{params.telephone}</p>
                 )}
@@ -76,6 +78,20 @@ export function RecuImprimable({
             )}
           </section>
 
+          {recu.lignes.length > 0 && (
+            <section className="recu-bloc">
+              <h3>Prestations</h3>
+              {recu.lignes.map((l) => (
+                <div className="recu-ligne" key={l.id}>
+                  <span>
+                    {l.libelle_snapshot} × {l.quantite}
+                  </span>
+                  <span>{formatMontant(l.prix_snapshot * l.quantite)}</span>
+                </div>
+              ))}
+            </section>
+          )}
+
           <section className="recu-montant">
             <span>Montant réglé</span>
             <strong>{formatMontant(recu.montant)}</strong>
@@ -87,7 +103,8 @@ export function RecuImprimable({
         </div>
 
         <div className="modal-actions no-print">
-          <button onClick={exporter}>Exporter PDF</button>
+          <button onClick={() => exporter("A4")}>PDF A4</button>
+          <button onClick={() => exporter("A5")}>PDF A5</button>
           <button className="btn-primary" onClick={() => window.print()}>
             Imprimer
           </button>

@@ -11,10 +11,11 @@ fn map_row(row: &Row) -> rusqlite::Result<Recu> {
     })
 }
 
-/// Reçu enrichi (client + note + paiement) pour l'impression.
+/// Reçu enrichi (client + note + paiement + prestations) pour l'impression.
 pub fn detail(conn: &Connection, id: i64) -> AppResult<RecuDetail> {
-    conn.query_row(
-        "SELECT r.id, r.numero, r.emis_le,
+    let mut recu = conn
+        .query_row(
+            "SELECT r.id, r.numero, r.emis_le,
                 p.montant, p.date_paiement, p.methode,
                 n.id AS note_id, n.reference AS note_reference,
                 c.nom AS client_nom, c.email AS client_email,
@@ -24,27 +25,30 @@ pub fn detail(conn: &Connection, id: i64) -> AppResult<RecuDetail> {
          JOIN notes_de_frais n ON n.id = p.note_id
          JOIN clients c        ON c.id = n.client_id
          WHERE r.id = ?1",
-        [id],
-        |row| {
-            Ok(RecuDetail {
-                id: row.get("id")?,
-                numero: row.get("numero")?,
-                emis_le: row.get("emis_le")?,
-                montant: row.get("montant")?,
-                date_paiement: row.get("date_paiement")?,
-                methode: row.get("methode")?,
-                note_id: row.get("note_id")?,
-                note_reference: row.get("note_reference")?,
-                client_nom: row.get("client_nom")?,
-                client_email: row.get("client_email")?,
-                client_telephone: row.get("client_telephone")?,
-            })
-        },
-    )
-    .map_err(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("reçu {id}")),
-        other => other.into(),
-    })
+            [id],
+            |row| {
+                Ok(RecuDetail {
+                    id: row.get("id")?,
+                    numero: row.get("numero")?,
+                    emis_le: row.get("emis_le")?,
+                    montant: row.get("montant")?,
+                    date_paiement: row.get("date_paiement")?,
+                    methode: row.get("methode")?,
+                    note_id: row.get("note_id")?,
+                    note_reference: row.get("note_reference")?,
+                    client_nom: row.get("client_nom")?,
+                    client_email: row.get("client_email")?,
+                    client_telephone: row.get("client_telephone")?,
+                    lignes: Vec::new(),
+                })
+            },
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("reçu {id}")),
+            other => other.into(),
+        })?;
+    recu.lignes = super::notes::lignes(conn, recu.note_id)?;
+    Ok(recu)
 }
 
 pub fn insert(conn: &Connection, paiement_id: i64, numero: &str) -> AppResult<i64> {

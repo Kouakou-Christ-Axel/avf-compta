@@ -1,5 +1,6 @@
 pub mod clients;
 pub mod depenses;
+pub mod fichiers;
 pub mod notes;
 pub mod paiements;
 pub mod parametres;

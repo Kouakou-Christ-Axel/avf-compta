@@ -5,6 +5,7 @@ import type {
   Client,
   ClientResume,
   Depense,
+  DepenseLigne,
   NewClient,
   NewDepense,
   NewNote,
@@ -70,6 +71,8 @@ export const genererRecu = (paiementId: number) =>
 // --- Dépenses ---
 export const listDepenses = (noteId: number) =>
   invoke<Depense[]>("list_depenses", { noteId });
+export const listAllDepenses = () =>
+  invoke<DepenseLigne[]>("list_all_depenses");
 export const createDepense = (depense: NewDepense) =>
   invoke<number>("create_depense", { depense });
 export const deleteDepense = (id: number) =>

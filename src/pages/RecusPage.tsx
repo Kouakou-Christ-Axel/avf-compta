@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { getParametres, getRecu, listRecus } from "../api/client";
+import { exportRecuPdf, type FormatPage } from "../api/pdf";
+import { exporterRecusCsv } from "../api/exports";
 import type { Parametres, Recu, RecuDetail } from "../api/types";
 import { RecuImprimable } from "../components/RecuImprimable";
+import { useToast } from "../components/toast-context";
 
 export function RecusPage() {
+  const { showToast } = useToast();
   const [recus, setRecus] = useState<Recu[]>([]);
   const [params, setParams] = useState<Parametres | null>(null);
   const [apercu, setApercu] = useState<RecuDetail | null>(null);
@@ -27,6 +31,26 @@ export function RecusPage() {
     }
   }
 
+  async function exporter(id: number, format: FormatPage) {
+    setErreur(null);
+    try {
+      const detail = await getRecu(id);
+      const ok = await exportRecuPdf(detail, params, format);
+      if (ok) showToast(`PDF (${format}) enregistré`);
+    } catch (e) {
+      setErreur(String(e));
+    }
+  }
+
+  async function exporterCsv() {
+    setErreur(null);
+    try {
+      if (await exporterRecusCsv()) showToast("Liste exportée");
+    } catch (e) {
+      setErreur(String(e));
+    }
+  }
+
   return (
     <section className="page">
       <header className="page-tete">
@@ -35,6 +59,9 @@ export function RecusPage() {
           <p className="page-sous">
             {recus.length} reçu{recus.length > 1 ? "s" : ""}
           </p>
+        </div>
+        <div className="page-actions">
+          <button onClick={exporterCsv}>Exporter (CSV)</button>
         </div>
       </header>
 
@@ -55,7 +82,9 @@ export function RecusPage() {
                 <td className="cell-fort">{r.numero}</td>
                 <td>{r.emis_le.slice(0, 10)}</td>
                 <td className="cell-actions">
-                  <button onClick={() => ouvrir(r.id)}>Voir / Imprimer</button>
+                  <button onClick={() => ouvrir(r.id)}>Voir</button>
+                  <button onClick={() => exporter(r.id, "A4")}>PDF A4</button>
+                  <button onClick={() => exporter(r.id, "A5")}>PDF A5</button>
                 </td>
               </tr>
             ))}

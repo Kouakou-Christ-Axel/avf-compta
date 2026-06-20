@@ -86,6 +86,15 @@ export interface NewDepense {
   date_depense: string;
 }
 
+export interface DepenseLigne {
+  id: number;
+  note_id: number;
+  note_reference: string | null;
+  libelle: string;
+  montant: number;
+  date_depense: string;
+}
+
 export interface ClientResume {
   id: number;
   nom: string;
@@ -151,6 +160,7 @@ export interface RecuDetail {
   client_nom: string;
   client_email: string | null;
   client_telephone: string | null;
+  lignes: NoteLigne[];
 }
 
 export interface ResumeStats {
@@ -163,6 +173,8 @@ export interface ResumeStats {
 
 export interface Parametres {
   cabinet_nom: string | null;
+  /** Sous-titre libre (ex: « Expert-comptable »). */
+  sous_titre: string | null;
   email: string | null;
   telephone: string | null;
   coordonnees_paiement: string | null;

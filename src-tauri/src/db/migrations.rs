@@ -99,6 +99,8 @@ pub fn migrations() -> Migrations<'static> {
         );
         "#,
         ),
+        // v6 : sous-titre libre du cabinet (ex: « Expert-comptable »).
+        M::up(r#"ALTER TABLE parametres ADD COLUMN sous_titre TEXT;"#),
     ])
 }
 

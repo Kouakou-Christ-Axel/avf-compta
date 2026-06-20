@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{Depense, NewDepense};
+use crate::models::{Depense, DepenseLigne, NewDepense};
 use rusqlite::{Connection, Row};
 
 fn map_row(row: &Row) -> rusqlite::Result<Depense> {
@@ -58,6 +58,28 @@ pub fn delete(conn: &Connection, id: i64) -> AppResult<()> {
         return Err(AppError::NotFound(format!("dépense {id}")));
     }
     Ok(())
+}
+
+/// Toutes les dépenses, avec la référence de leur note (export global).
+pub fn list_all(conn: &Connection) -> AppResult<Vec<DepenseLigne>> {
+    let mut stmt = conn.prepare(
+        "SELECT d.id, d.note_id, n.reference AS note_reference,
+                d.libelle, d.montant, d.date_depense
+         FROM depenses d
+         JOIN notes_de_frais n ON n.id = d.note_id
+         ORDER BY d.date_depense, d.id",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(DepenseLigne {
+            id: row.get("id")?,
+            note_id: row.get("note_id")?,
+            note_reference: row.get("note_reference")?,
+            libelle: row.get("libelle")?,
+            montant: row.get("montant")?,
+            date_depense: row.get("date_depense")?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
 #[cfg(test)]
