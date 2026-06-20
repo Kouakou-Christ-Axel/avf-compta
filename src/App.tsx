@@ -3,6 +3,7 @@ import "./App.css";
 import { ClientsPage } from "./pages/ClientsPage";
 import { PrestationsPage } from "./pages/PrestationsPage";
 import { NotesPage } from "./pages/NotesPage";
+import { DepensesPage } from "./pages/DepensesPage";
 import { RecusPage } from "./pages/RecusPage";
 import { StatsPage } from "./pages/StatsPage";
 import { ParametresPage } from "./pages/ParametresPage";
@@ -13,6 +14,7 @@ const ONGLETS = [
   { id: "clients", label: "Clients", icone: "○" },
   { id: "prestations", label: "Prestations", icone: "◇" },
   { id: "notes", label: "Notes de frais", icone: "▤" },
+  { id: "depenses", label: "Dépenses", icone: "▦" },
   { id: "recus", label: "Reçus", icone: "▣" },
   { id: "parametres", label: "Paramètres", icone: "⚙" },
 ] as const;
@@ -52,6 +54,7 @@ function App() {
           {onglet === "clients" && <ClientsPage />}
           {onglet === "prestations" && <PrestationsPage />}
           {onglet === "notes" && <NotesPage />}
+          {onglet === "depenses" && <DepensesPage />}
           {onglet === "recus" && <RecusPage />}
           {onglet === "parametres" && <ParametresPage />}
         </main>
