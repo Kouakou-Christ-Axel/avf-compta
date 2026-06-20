@@ -161,6 +161,8 @@ export interface RecuDetail {
   client_email: string | null;
   client_telephone: string | null;
   lignes: NoteLigne[];
+  note_total: number;
+  note_solde: number;
 }
 
 export interface ResumeStats {

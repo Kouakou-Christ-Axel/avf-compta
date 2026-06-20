@@ -40,6 +40,8 @@ pub fn detail(conn: &Connection, id: i64) -> AppResult<RecuDetail> {
                     client_email: row.get("client_email")?,
                     client_telephone: row.get("client_telephone")?,
                     lignes: Vec::new(),
+                    note_total: 0,
+                    note_solde: 0,
                 })
             },
         )
@@ -48,6 +50,9 @@ pub fn detail(conn: &Connection, id: i64) -> AppResult<RecuDetail> {
             other => other.into(),
         })?;
     recu.lignes = super::notes::lignes(conn, recu.note_id)?;
+    recu.note_total = super::notes::total(conn, recu.note_id)?;
+    let paye = super::paiements::total_paye(conn, recu.note_id)?;
+    recu.note_solde = recu.note_total - paye;
     Ok(recu)
 }
 

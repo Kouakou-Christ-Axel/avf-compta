@@ -85,6 +85,17 @@ export function RecuImprimable({
             <strong>{formatMontant(recu.montant)}</strong>
           </section>
 
+          <section className="recu-bloc">
+            <div className="recu-ligne">
+              <span>Total de la note</span>
+              <span>{formatMontant(recu.note_total)}</span>
+            </div>
+            <div className="recu-ligne">
+              <span>Reste à payer</span>
+              <span>{formatMontant(recu.note_solde)}</span>
+            </div>
+          </section>
+
           <footer className="recu-pied">
             Reçu pour le montant indiqué. Merci de votre confiance.
           </footer>
