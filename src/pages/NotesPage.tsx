@@ -16,6 +16,7 @@ import {
 } from "../api/client";
 import { formatMontant, parseMontant } from "../api/money";
 import { exportNotePdf } from "../api/pdf";
+import { exporterDepensesCsv, exporterNotesCsv } from "../api/exports";
 import type {
   Client,
   NewNoteLigne,
@@ -182,6 +183,24 @@ export function NotesPage() {
     }
   }
 
+  async function exporterNotesListeCsv() {
+    setErreur(null);
+    try {
+      if (await exporterNotesCsv()) showToast("Notes exportées");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
+  async function exporterDepensesListeCsv() {
+    setErreur(null);
+    try {
+      if (await exporterDepensesCsv()) showToast("Dépenses exportées");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
   return (
     <section className="page">
       <header className="page-tete">
@@ -190,6 +209,12 @@ export function NotesPage() {
           <p className="page-sous">
             {notes.length} note{notes.length > 1 ? "s" : ""}
           </p>
+        </div>
+        <div className="page-actions">
+          <button onClick={exporterNotesListeCsv}>Exporter notes (CSV)</button>
+          <button onClick={exporterDepensesListeCsv}>
+            Exporter dépenses (CSV)
+          </button>
         </div>
       </header>
 

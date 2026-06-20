@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Parametres {
     pub cabinet_nom: Option<String>,
+    /// Sous-titre libre (ex: « Expert-comptable »), affiché sous le nom.
+    pub sous_titre: Option<String>,
     pub email: Option<String>,
     pub telephone: Option<String>,
     pub coordonnees_paiement: Option<String>,

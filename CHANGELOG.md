@@ -7,6 +7,15 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Ajouté (import/export &amp; documents)
+
+- **Import/export CSV** : import d'une liste de clients (avec modèle
+  téléchargeable à remplir) et export CSV des clients, reçus, notes de frais et
+  dépenses.
+- **Reçu** : la liste des prestations de la note y figure désormais.
+- **Profil cabinet** : champ « Fonction / sous-titre » paramétrable (remplace le
+  « Cabinet comptable » figé) repris sur les reçus et les PDF.
+
 ### Corrigé / Ajouté (export PDF)
 
 - **Export PDF réparé** : enregistrement via une vraie boîte « Enregistrer sous »

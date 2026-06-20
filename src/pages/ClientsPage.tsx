@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import { createClient, deleteClient, listClientsResume } from "../api/client";
+import {
+  exporterClientsCsv,
+  importerClientsCsv,
+  telechargerModeleClients,
+} from "../api/exports";
 import type { ClientResume } from "../api/types";
 import { formatMontant } from "../api/money";
 import { CopyText } from "../components/CopyText";
+import { useToast } from "../components/toast-context";
 
 export function ClientsPage() {
+  const { showToast } = useToast();
   const [clients, setClients] = useState<ClientResume[]>([]);
   const [nom, setNom] = useState("");
   const [email, setEmail] = useState("");
@@ -48,6 +55,37 @@ export function ClientsPage() {
     }
   }
 
+  async function importer() {
+    setErreur(null);
+    try {
+      const n = await importerClientsCsv();
+      if (n !== null) {
+        await recharger();
+        showToast(`${n} client(s) importé(s)`);
+      }
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
+  async function exporter() {
+    setErreur(null);
+    try {
+      if (await exporterClientsCsv()) showToast("Liste exportée");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
+  async function modele() {
+    setErreur(null);
+    try {
+      if (await telechargerModeleClients()) showToast("Modèle enregistré");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
   return (
     <section className="page">
       <header className="page-tete">
@@ -56,6 +94,11 @@ export function ClientsPage() {
           <p className="page-sous">
             {clients.length} client{clients.length > 1 ? "s" : ""}
           </p>
+        </div>
+        <div className="page-actions">
+          <button onClick={importer}>Importer (CSV)</button>
+          <button onClick={modele}>Modèle</button>
+          <button onClick={exporter}>Exporter (CSV)</button>
         </div>
       </header>
 

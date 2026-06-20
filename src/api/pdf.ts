@@ -11,10 +11,10 @@ const COULEUR = "#1d4ed8";
 /** En-tête « cabinet » (logo + nom + coordonnées) à gauche du document. */
 function enteteCabinet(params?: Parametres | null): Content {
   const nom = params?.cabinet_nom || "avf-compta";
-  const lignes: Content[] = [
-    { text: nom, style: "marque" },
-    { text: "Cabinet comptable", color: "#64748b" },
-  ];
+  const lignes: Content[] = [{ text: nom, style: "marque" }];
+  if (params?.sous_titre) {
+    lignes.push({ text: params.sous_titre, color: "#64748b" });
+  }
   if (params?.telephone) lignes.push({ text: params.telephone, fontSize: 9 });
   if (params?.email) lignes.push({ text: params.email, fontSize: 9 });
 
@@ -158,6 +158,32 @@ export function recuDocDefinition(
   format: FormatPage = "A4",
 ): TDocumentDefinitions {
   const marge = format === "A5" ? 28 : 40;
+  const lignesRecu: TableCell[][] = recu.lignes.map((l) => [
+    l.libelle_snapshot,
+    { text: String(l.quantite), alignment: "center" },
+    { text: formatMontant(l.prix_snapshot * l.quantite), alignment: "right" },
+  ]);
+  const blocPrestations: Content[] =
+    lignesRecu.length > 0
+      ? [
+          {
+            margin: [0, 16, 0, 0],
+            table: {
+              headerRows: 1,
+              widths: ["*", "auto", "auto"],
+              body: [
+                [
+                  { text: "Prestation", style: "th" },
+                  { text: "Qté", style: "th", alignment: "center" },
+                  { text: "Montant", style: "th", alignment: "right" },
+                ],
+                ...lignesRecu,
+              ],
+            },
+            layout: "lightHorizontalLines",
+          },
+        ]
+      : [];
   return {
     info: { title: `Reçu ${recu.numero}` },
     pageSize: format,
@@ -199,6 +225,7 @@ export function recuDocDefinition(
         },
         layout: "lightHorizontalLines",
       },
+      ...blocPrestations,
       {
         margin: [0, 18, 0, 0],
         table: {
@@ -234,6 +261,7 @@ export function recuDocDefinition(
         color: "#64748b",
         characterSpacing: 1,
       },
+      th: { bold: true, fontSize: 10, color: "#334155" },
     },
     defaultStyle: { fontSize: 11 },
   };

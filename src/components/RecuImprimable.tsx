@@ -36,7 +36,9 @@ export function RecuImprimable({
               )}
               <div>
                 <h2 className="recu-cabinet">{cabinet}</h2>
-                <p className="recu-sous">Cabinet comptable</p>
+                {params?.sous_titre && (
+                  <p className="recu-sous">{params.sous_titre}</p>
+                )}
                 {params?.telephone && (
                   <p className="recu-coord">{params.telephone}</p>
                 )}
@@ -75,6 +77,20 @@ export function RecuImprimable({
               </div>
             )}
           </section>
+
+          {recu.lignes.length > 0 && (
+            <section className="recu-bloc">
+              <h3>Prestations</h3>
+              {recu.lignes.map((l) => (
+                <div className="recu-ligne" key={l.id}>
+                  <span>
+                    {l.libelle_snapshot} × {l.quantite}
+                  </span>
+                  <span>{formatMontant(l.prix_snapshot * l.quantite)}</span>
+                </div>
+              ))}
+            </section>
+          )}
 
           <section className="recu-montant">
             <span>Montant réglé</span>

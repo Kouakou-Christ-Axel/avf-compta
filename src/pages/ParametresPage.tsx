@@ -6,6 +6,7 @@ import { MisesAJour } from "../components/MisesAJour";
 
 const VIDE: Parametres = {
   cabinet_nom: null,
+  sous_titre: null,
   email: null,
   telephone: null,
   coordonnees_paiement: null,
@@ -45,6 +46,7 @@ export function ParametresPage() {
     try {
       await saveParametres({
         cabinet_nom: p.cabinet_nom || null,
+        sous_titre: p.sous_titre || null,
         email: p.email || null,
         telephone: p.telephone || null,
         coordonnees_paiement: p.coordonnees_paiement || null,
@@ -107,6 +109,14 @@ export function ParametresPage() {
               placeholder="Ex : Cabinet AVF"
               value={p.cabinet_nom ?? ""}
               onChange={(e) => maj("cabinet_nom", e.target.value)}
+            />
+          </label>
+          <label>
+            <span>Fonction / sous-titre</span>
+            <input
+              placeholder="Ex : Expert-comptable"
+              value={p.sous_titre ?? ""}
+              onChange={(e) => maj("sous_titre", e.target.value)}
             />
           </label>
           <label>

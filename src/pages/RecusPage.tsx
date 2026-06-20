@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getParametres, getRecu, listRecus } from "../api/client";
 import { exportRecuPdf, type FormatPage } from "../api/pdf";
+import { exporterRecusCsv } from "../api/exports";
 import type { Parametres, Recu, RecuDetail } from "../api/types";
 import { RecuImprimable } from "../components/RecuImprimable";
 import { useToast } from "../components/toast-context";
@@ -41,6 +42,15 @@ export function RecusPage() {
     }
   }
 
+  async function exporterCsv() {
+    setErreur(null);
+    try {
+      if (await exporterRecusCsv()) showToast("Liste exportée");
+    } catch (e) {
+      setErreur(String(e));
+    }
+  }
+
   return (
     <section className="page">
       <header className="page-tete">
@@ -49,6 +59,9 @@ export function RecusPage() {
           <p className="page-sous">
             {recus.length} reçu{recus.length > 1 ? "s" : ""}
           </p>
+        </div>
+        <div className="page-actions">
+          <button onClick={exporterCsv}>Exporter (CSV)</button>
         </div>
       </header>
 
