@@ -1,9 +1,7 @@
 import { formatMontant } from "../api/money";
-import { exportRecuPdf, type FormatPage } from "../api/pdf";
 import type { Parametres, RecuDetail } from "../api/types";
-import { useToast } from "./toast-context";
 
-/** Aperçu d'un reçu, imprimable (window.print) ou exportable en PDF (A4/A5). */
+/** Aperçu d'un reçu, imprimable (window.print → choix du format/PDF). */
 export function RecuImprimable({
   recu,
   params,
@@ -13,17 +11,7 @@ export function RecuImprimable({
   params?: Parametres | null;
   onClose: () => void;
 }) {
-  const { showToast } = useToast();
   const cabinet = params?.cabinet_nom || "avf-compta";
-
-  async function exporter(format: FormatPage) {
-    try {
-      const ok = await exportRecuPdf(recu, params, format);
-      if (ok) showToast(`PDF (${format}) enregistré`);
-    } catch (e) {
-      showToast(`Échec de l'export : ${e}`);
-    }
-  }
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -97,14 +85,23 @@ export function RecuImprimable({
             <strong>{formatMontant(recu.montant)}</strong>
           </section>
 
+          <section className="recu-bloc">
+            <div className="recu-ligne">
+              <span>Total de la note</span>
+              <span>{formatMontant(recu.note_total)}</span>
+            </div>
+            <div className="recu-ligne">
+              <span>Reste à payer</span>
+              <span>{formatMontant(recu.note_solde)}</span>
+            </div>
+          </section>
+
           <footer className="recu-pied">
             Reçu pour le montant indiqué. Merci de votre confiance.
           </footer>
         </div>
 
         <div className="modal-actions no-print">
-          <button onClick={() => exporter("A4")}>PDF A4</button>
-          <button onClick={() => exporter("A5")}>PDF A5</button>
           <button className="btn-primary" onClick={() => window.print()}>
             Imprimer
           </button>

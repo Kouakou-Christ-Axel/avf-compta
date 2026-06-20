@@ -246,6 +246,20 @@ export function recuDocDefinition(
         layout: "noBorders",
       },
       {
+        margin: [0, 8, 0, 0],
+        table: {
+          widths: ["*", "auto"],
+          body: [
+            ["Total de la note", formatMontant(recu.note_total)],
+            [
+              { text: "Reste à payer", bold: true },
+              { text: formatMontant(recu.note_solde), bold: true },
+            ],
+          ],
+        },
+        layout: "lightHorizontalLines",
+      },
+      {
         text: "Reçu pour le montant indiqué. Merci de votre confiance.",
         margin: [0, 18, 0, 0],
         fontSize: 9,

@@ -77,11 +77,15 @@ describe("recuDocDefinition", () => {
           quantite: 1,
         },
       ],
+      note_total: 100000,
+      note_solde: 40000,
     };
     const t = texte(recuDocDefinition(recu, params));
     expect(t).toContain("RECU-0001");
     expect(t).toContain("100 000 FCFA");
     expect(t).toContain("Conseil");
+    expect(t).toContain("Reste à payer");
+    expect(t).toContain("40 000 FCFA");
     // Les coordonnées de paiement ne figurent pas sur le reçu.
     expect(t).not.toContain("Wave +225 0700000000");
   });

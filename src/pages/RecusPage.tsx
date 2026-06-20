@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { getParametres, getRecu, listRecus } from "../api/client";
-import { exportRecuPdf, type FormatPage } from "../api/pdf";
 import { exporterRecusCsv } from "../api/exports";
 import type { Parametres, Recu, RecuDetail } from "../api/types";
 import { RecuImprimable } from "../components/RecuImprimable";
@@ -26,17 +25,6 @@ export function RecusPage() {
     setErreur(null);
     try {
       setApercu(await getRecu(id));
-    } catch (e) {
-      setErreur(String(e));
-    }
-  }
-
-  async function exporter(id: number, format: FormatPage) {
-    setErreur(null);
-    try {
-      const detail = await getRecu(id);
-      const ok = await exportRecuPdf(detail, params, format);
-      if (ok) showToast(`PDF (${format}) enregistré`);
     } catch (e) {
       setErreur(String(e));
     }
@@ -82,9 +70,7 @@ export function RecusPage() {
                 <td className="cell-fort">{r.numero}</td>
                 <td>{r.emis_le.slice(0, 10)}</td>
                 <td className="cell-actions">
-                  <button onClick={() => ouvrir(r.id)}>Voir</button>
-                  <button onClick={() => exporter(r.id, "A4")}>PDF A4</button>
-                  <button onClick={() => exporter(r.id, "A5")}>PDF A5</button>
+                  <button onClick={() => ouvrir(r.id)}>Voir / Imprimer</button>
                 </td>
               </tr>
             ))}

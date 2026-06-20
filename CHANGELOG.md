@@ -7,6 +7,14 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Modifié / Ajouté
+
+- Boutons d'export PDF remplacés par **Imprimer** (plus simple et fiable ;
+  depuis la fenêtre d'impression on peut « Enregistrer en PDF », au format
+  voulu). Note de frais imprimable comme les reçus.
+- Nouvelle page **Dépenses** : création de dépenses (liées à une note) et
+  récapitulatif global avec total, suppression et export CSV.
+
 ### Ajouté (import/export &amp; documents)
 
 - **Import/export CSV** : import d'une liste de clients (avec modèle

@@ -15,8 +15,7 @@ import {
   soldeNote,
 } from "../api/client";
 import { formatMontant, parseMontant } from "../api/money";
-import { exportNotePdf } from "../api/pdf";
-import { exporterDepensesCsv, exporterNotesCsv } from "../api/exports";
+import { exporterNotesCsv } from "../api/exports";
 import type {
   Client,
   NewNoteLigne,
@@ -29,6 +28,7 @@ import type {
   SoldeNote,
 } from "../api/types";
 import { RecuImprimable } from "../components/RecuImprimable";
+import { NoteImprimable } from "../components/NoteImprimable";
 import { useToast } from "../components/toast-context";
 
 function aujourdhui(): string {
@@ -81,6 +81,11 @@ export function NotesPage() {
   const [params, setParams] = useState<Parametres | null>(null);
   const [selection, setSelection] = useState<number | null>(null);
   const [recuAImprimer, setRecuAImprimer] = useState<RecuDetail | null>(null);
+  const [noteAImprimer, setNoteAImprimer] = useState<{
+    detail: NoteDetail;
+    solde: SoldeNote;
+    clientNom: string;
+  } | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
   // Formulaire de création.
@@ -168,7 +173,7 @@ export function NotesPage() {
   const clientSelectionne =
     clients.find((c) => c.id === noteSelectionnee?.client_id)?.nom ?? "Client";
 
-  async function exporterNoteListe(n: NoteResume) {
+  async function imprimerNoteListe(n: NoteResume) {
     setErreur(null);
     try {
       const nom = clients.find((c) => c.id === n.client_id)?.nom ?? "Client";
@@ -176,8 +181,7 @@ export function NotesPage() {
         getNote(n.id),
         soldeNote(n.id),
       ]);
-      const ok = await exportNotePdf(detail, nom, solde, params);
-      if (ok) showToast("PDF enregistré");
+      setNoteAImprimer({ detail, solde, clientNom: nom });
     } catch (err) {
       setErreur(String(err));
     }
@@ -187,15 +191,6 @@ export function NotesPage() {
     setErreur(null);
     try {
       if (await exporterNotesCsv()) showToast("Notes exportées");
-    } catch (err) {
-      setErreur(String(err));
-    }
-  }
-
-  async function exporterDepensesListeCsv() {
-    setErreur(null);
-    try {
-      if (await exporterDepensesCsv()) showToast("Dépenses exportées");
     } catch (err) {
       setErreur(String(err));
     }
@@ -211,10 +206,7 @@ export function NotesPage() {
           </p>
         </div>
         <div className="page-actions">
-          <button onClick={exporterNotesListeCsv}>Exporter notes (CSV)</button>
-          <button onClick={exporterDepensesListeCsv}>
-            Exporter dépenses (CSV)
-          </button>
+          <button onClick={exporterNotesListeCsv}>Exporter (CSV)</button>
         </div>
       </header>
 
@@ -343,7 +335,7 @@ export function NotesPage() {
                 <td className="col-montant">{formatMontant(n.solde)}</td>
                 <td className="cell-actions">
                   <button onClick={() => setSelection(n.id)}>Détail</button>
-                  <button onClick={() => exporterNoteListe(n)}>PDF</button>
+                  <button onClick={() => imprimerNoteListe(n)}>Imprimer</button>
                 </td>
               </tr>
             ))}
@@ -361,11 +353,12 @@ export function NotesPage() {
       {selection !== null && (
         <DetailNote
           noteId={selection}
-          clientNom={clientSelectionne}
-          params={params}
           onFermer={() => setSelection(null)}
           onChangement={rechargerNotes}
           onRecu={setRecuAImprimer}
+          onImprimer={(detail, solde) =>
+            setNoteAImprimer({ detail, solde, clientNom: clientSelectionne })
+          }
         />
       )}
 
@@ -376,24 +369,32 @@ export function NotesPage() {
           onClose={() => setRecuAImprimer(null)}
         />
       )}
+
+      {noteAImprimer && (
+        <NoteImprimable
+          detail={noteAImprimer.detail}
+          clientNom={noteAImprimer.clientNom}
+          solde={noteAImprimer.solde}
+          params={params}
+          onClose={() => setNoteAImprimer(null)}
+        />
+      )}
     </section>
   );
 }
 
 function DetailNote({
   noteId,
-  clientNom,
-  params,
   onFermer,
   onChangement,
   onRecu,
+  onImprimer,
 }: {
   noteId: number;
-  clientNom: string;
-  params: Parametres | null;
   onFermer: () => void;
   onChangement: () => void;
   onRecu: (recu: RecuDetail) => void;
+  onImprimer: (detail: NoteDetail, solde: SoldeNote) => void;
 }) {
   const { showToast } = useToast();
   const [detail, setDetail] = useState<NoteDetail | null>(null);
@@ -453,14 +454,8 @@ function DetailNote({
     }
   }
 
-  async function exporterNote() {
-    if (!detail) return;
-    try {
-      const ok = await exportNotePdf(detail, clientNom, solde, params);
-      if (ok) showToast("PDF enregistré");
-    } catch (err) {
-      setErreur(String(err));
-    }
+  function imprimerNote() {
+    if (detail && solde) onImprimer(detail, solde);
   }
 
   async function imprimerRecu(paiementId: number) {
@@ -559,7 +554,7 @@ function DetailNote({
         </div>
 
         <div className="detail-actions">
-          <button onClick={exporterNote}>Exporter la note en PDF</button>
+          <button onClick={imprimerNote}>Imprimer la note</button>
         </div>
 
         {!solde.payee ? (

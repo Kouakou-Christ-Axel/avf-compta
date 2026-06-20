@@ -24,4 +24,8 @@ pub struct RecuDetail {
     pub client_telephone: Option<String>,
     /// Prestations (lignes) de la note réglée.
     pub lignes: Vec<super::NoteLigne>,
+    /// Total facturé de la note.
+    pub note_total: i64,
+    /// Reste à payer sur la note (après ce paiement).
+    pub note_solde: i64,
 }
