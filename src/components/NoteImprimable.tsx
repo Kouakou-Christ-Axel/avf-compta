@@ -39,7 +39,7 @@ export function NoteImprimable({
               </div>
             </div>
             <div className="recu-meta">
-              <div className="recu-titre">NOTE DE FRAIS</div>
+              <div className="recu-titre">FACTURE</div>
               <div className="recu-numero">
                 {note.reference ?? `#${note.id}`}
               </div>

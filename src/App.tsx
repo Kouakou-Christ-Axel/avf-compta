@@ -13,7 +13,7 @@ const ONGLETS = [
   { id: "stats", label: "Tableau de bord", icone: "▱" },
   { id: "clients", label: "Clients", icone: "○" },
   { id: "prestations", label: "Prestations", icone: "◇" },
-  { id: "notes", label: "Notes de frais", icone: "▤" },
+  { id: "notes", label: "Factures", icone: "▤" },
   { id: "depenses", label: "Dépenses", icone: "▦" },
   { id: "recus", label: "Reçus", icone: "▣" },
   { id: "parametres", label: "Paramètres", icone: "⚙" },

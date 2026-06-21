@@ -16,6 +16,8 @@ describe("ClientsPage", () => {
         total_facture: 150000,
         total_paye: 50000,
         solde: 100000,
+        total_depenses: 30000,
+        marge: 120000,
       },
     ];
     mockIPC((cmd) => (cmd === "list_clients_resume" ? clients : undefined));

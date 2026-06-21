@@ -46,17 +46,23 @@ pub fn list_resume(conn: &Connection) -> AppResult<Vec<ClientResume>> {
                 COALESCE((SELECT SUM(l.prix_snapshot * l.quantite)
                           FROM note_lignes l
                           JOIN notes_de_frais n ON n.id = l.note_id
-                          WHERE n.client_id = c.id), 0) AS total_facture,
+                          WHERE n.client_id = c.id AND n.statut != 'annulee'), 0) AS total_facture,
                 COALESCE((SELECT SUM(p.montant)
                           FROM paiements p
                           JOIN notes_de_frais n ON n.id = p.note_id
-                          WHERE n.client_id = c.id), 0) AS total_paye
+                          WHERE n.client_id = c.id AND n.statut != 'annulee'
+                                AND p.annule = 0), 0) AS total_paye,
+                COALESCE((SELECT SUM(d.montant)
+                          FROM depenses d
+                          JOIN notes_de_frais n ON n.id = d.note_id
+                          WHERE n.client_id = c.id AND n.statut != 'annulee'), 0) AS total_depenses
          FROM clients c
          ORDER BY c.nom COLLATE NOCASE",
     )?;
     let rows = stmt.query_map([], |row| {
         let total_facture: i64 = row.get("total_facture")?;
         let total_paye: i64 = row.get("total_paye")?;
+        let total_depenses: i64 = row.get("total_depenses")?;
         Ok(ClientResume {
             id: row.get("id")?,
             nom: row.get("nom")?,
@@ -65,6 +71,8 @@ pub fn list_resume(conn: &Connection) -> AppResult<Vec<ClientResume>> {
             total_facture,
             total_paye,
             solde: total_facture - total_paye,
+            total_depenses,
+            marge: total_facture - total_depenses,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)

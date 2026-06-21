@@ -101,6 +101,16 @@ pub fn migrations() -> Migrations<'static> {
         ),
         // v6 : sous-titre libre du cabinet (ex: « Expert-comptable »).
         M::up(r#"ALTER TABLE parametres ADD COLUMN sous_titre TEXT;"#),
+        // v7 : annulation des paiements (reçus) + modes de paiement configurables.
+        M::up(
+            r#"
+        ALTER TABLE paiements ADD COLUMN annule INTEGER NOT NULL DEFAULT 0;
+        CREATE TABLE modes_paiement (
+            id      INTEGER PRIMARY KEY,
+            libelle TEXT NOT NULL
+        );
+        "#,
+        ),
     ])
 }
 

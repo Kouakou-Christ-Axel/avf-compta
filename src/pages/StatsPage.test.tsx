@@ -13,7 +13,11 @@ describe("StatsPage", () => {
       total_encaisse: 1000000,
       total_impaye: 250000,
     };
-    mockIPC((cmd) => (cmd === "resume_stats" ? stats : undefined));
+    mockIPC((cmd) => {
+      if (cmd === "resume_stats") return stats;
+      if (cmd === "stats_mensuelles") return [];
+      return undefined;
+    });
 
     render(<StatsPage />);
 

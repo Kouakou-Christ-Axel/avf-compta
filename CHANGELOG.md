@@ -7,6 +7,19 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Ajouté / Modifié (lot 9–16)
+
+- **« Notes de frais » renommées « Factures »** dans toute l'interface.
+- **Tableau de bord** : courbes mensuelles Chiffre d'affaires et Dépenses, et
+  histogramme de la Marge, avec **filtre par plage de dates** (recharts).
+- **Marge par client** : colonne Marge (facturé − dépenses) dans la liste clients.
+- **Modes de paiement configurables** (créés dans Paramètres) + menu déroulant
+  lors de l'encaissement.
+- **Nom du client** ajouté à la liste des reçus (+ montant).
+- **Annulation douce** d'une facture ou d'un reçu : marquée « Annulé(e) »,
+  conservée mais exclue des totaux, soldes et statistiques (le reçu annulé
+  rouvre la facture).
+
 ### Modifié / Ajouté
 
 - Boutons d'export PDF remplacés par **Imprimer** (plus simple et fiable ;

@@ -7,6 +7,7 @@ pub struct Paiement {
     pub montant: i64,
     pub date_paiement: String,
     pub methode: Option<String>,
+    pub annule: bool,
     pub cree_le: String,
 }
 

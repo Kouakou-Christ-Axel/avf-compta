@@ -103,6 +103,8 @@ export interface ClientResume {
   total_facture: number;
   total_paye: number;
   solde: number;
+  total_depenses: number;
+  marge: number;
 }
 
 export interface NewNoteLigne {
@@ -123,6 +125,7 @@ export interface Paiement {
   montant: number;
   date_paiement: string;
   methode: string | null;
+  annule: boolean;
   cree_le: string;
 }
 
@@ -171,6 +174,27 @@ export interface ResumeStats {
   total_facture: number;
   total_encaisse: number;
   total_impaye: number;
+}
+
+export interface RecuResume {
+  id: number;
+  numero: string;
+  emis_le: string;
+  client_nom: string;
+  montant: number;
+  annule: boolean;
+}
+
+export interface StatMois {
+  mois: string;
+  ca: number;
+  depenses: number;
+  marge: number;
+}
+
+export interface ModePaiement {
+  id: number;
+  libelle: string;
 }
 
 export interface Parametres {

@@ -115,7 +115,7 @@ export function DepensesPage() {
       <form className="carte-form" onSubmit={ajouter}>
         <div className="champs">
           <label>
-            <span>Note</span>
+            <span>Facture</span>
             <select
               value={noteId}
               onChange={(e) => setNoteId(e.target.value)}
@@ -167,7 +167,7 @@ export function DepensesPage() {
         <table className="table">
           <thead>
             <tr>
-              <th>Note</th>
+              <th>Facture</th>
               <th>Libellé</th>
               <th className="col-montant">Montant</th>
               <th>Date</th>

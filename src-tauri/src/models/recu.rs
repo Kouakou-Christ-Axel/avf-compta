@@ -8,6 +8,17 @@ pub struct Recu {
     pub emis_le: String,
 }
 
+/// Ligne du récapitulatif des reçus (liste), avec client et montant.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RecuResume {
+    pub id: i64,
+    pub numero: String,
+    pub emis_le: String,
+    pub client_nom: String,
+    pub montant: i64,
+    pub annule: bool,
+}
+
 /// Reçu enrichi de tout le contexte nécessaire à l'impression.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RecuDetail {

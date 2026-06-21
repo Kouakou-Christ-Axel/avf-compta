@@ -24,7 +24,8 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "pdfmake": "^0.3.11",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

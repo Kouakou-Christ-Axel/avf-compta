@@ -148,6 +148,7 @@ export function ClientsPage() {
               <th className="col-montant">Montant</th>
               <th className="col-montant">Payé</th>
               <th className="col-montant">Restant</th>
+              <th className="col-montant">Marge</th>
               <th></th>
             </tr>
           </thead>
@@ -162,6 +163,7 @@ export function ClientsPage() {
                 </td>
                 <td className="col-montant">{formatMontant(c.total_paye)}</td>
                 <td className="col-montant">{formatMontant(c.solde)}</td>
+                <td className="col-montant">{formatMontant(c.marge)}</td>
                 <td className="cell-actions">
                   <button
                     className="btn-danger"
@@ -174,7 +176,7 @@ export function ClientsPage() {
             ))}
             {clients.length === 0 && (
               <tr>
-                <td colSpan={7} className="vide">
+                <td colSpan={8} className="vide">
                   Aucun client pour le moment.
                 </td>
               </tr>

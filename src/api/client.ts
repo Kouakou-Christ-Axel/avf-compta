@@ -11,6 +11,7 @@ import type {
   NewNote,
   NewPaiement,
   NewPrestation,
+  ModePaiement,
   NoteDeFrais,
   NoteDetail,
   NoteResume,
@@ -19,8 +20,10 @@ import type {
   Prestation,
   Recu,
   RecuDetail,
+  RecuResume,
   ResumeStats,
   SoldeNote,
+  StatMois,
 } from "./types";
 
 // --- Clients ---
@@ -53,6 +56,7 @@ export const getNote = (id: number) => invoke<NoteDetail>("get_note", { id });
 export const createNote = (note: NewNote) =>
   invoke<number>("create_note", { note });
 export const deleteNote = (id: number) => invoke<void>("delete_note", { id });
+export const annulerNote = (id: number) => invoke<void>("annuler_note", { id });
 
 // --- Paiements ---
 export const listPaiements = (noteId: number) =>
@@ -64,9 +68,11 @@ export const enregistrerPaiement = (paiement: NewPaiement) =>
 
 // --- Reçus ---
 export const listRecus = () => invoke<Recu[]>("list_recus");
+export const listRecusResume = () => invoke<RecuResume[]>("list_recus_resume");
 export const getRecu = (id: number) => invoke<RecuDetail>("get_recu", { id });
 export const genererRecu = (paiementId: number) =>
   invoke<Recu>("generer_recu", { paiementId });
+export const annulerRecu = (id: number) => invoke<void>("annuler_recu", { id });
 
 // --- Dépenses ---
 export const listDepenses = (noteId: number) =>
@@ -80,6 +86,15 @@ export const deleteDepense = (id: number) =>
 
 // --- Stats ---
 export const resumeStats = () => invoke<ResumeStats>("resume_stats");
+export const statsMensuelles = () => invoke<StatMois[]>("stats_mensuelles");
+
+// --- Modes de paiement ---
+export const listModesPaiement = () =>
+  invoke<ModePaiement[]>("list_modes_paiement");
+export const createModePaiement = (libelle: string) =>
+  invoke<number>("create_mode_paiement", { libelle });
+export const deleteModePaiement = (id: number) =>
+  invoke<void>("delete_mode_paiement", { id });
 
 // --- Paramètres (profil du cabinet) ---
 export const getParametres = () => invoke<Parametres>("get_parametres");
