@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  annulerNote,
   createDepense,
   createNote,
   deleteDepense,
@@ -9,6 +10,7 @@ import {
   getParametres,
   getRecu,
   listClients,
+  listModesPaiement,
   listNotesResume,
   listPaiements,
   listPrestations,
@@ -18,6 +20,7 @@ import { formatMontant, parseMontant } from "../api/money";
 import { exporterNotesCsv } from "../api/exports";
 import type {
   Client,
+  ModePaiement,
   NewNoteLigne,
   NoteDetail,
   NoteResume,
@@ -65,6 +68,9 @@ async function notifierRetards(nb: number) {
 }
 
 function badgeStatut(statut: string) {
+  if (statut === "annulee") {
+    return <span className="badge badge-retard">Annulée</span>;
+  }
   const payee = statut === "payee";
   return (
     <span className={payee ? "badge badge-ok" : "badge badge-attente"}>
@@ -79,6 +85,7 @@ export function NotesPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [prestations, setPrestations] = useState<Prestation[]>([]);
   const [params, setParams] = useState<Parametres | null>(null);
+  const [modes, setModes] = useState<ModePaiement[]>([]);
   const [selection, setSelection] = useState<number | null>(null);
   const [recuAImprimer, setRecuAImprimer] = useState<RecuDetail | null>(null);
   const [noteAImprimer, setNoteAImprimer] = useState<{
@@ -105,12 +112,14 @@ export function NotesPage() {
       listClients(),
       listPrestations(),
       getParametres(),
+      listModesPaiement(),
     ])
-      .then(([n, c, p, par]) => {
+      .then(([n, c, p, par, m]) => {
         setNotes(n);
         setClients(c);
         setPrestations(p);
         setParams(par);
+        setModes(m);
         const nbRetard = n.filter(estEnRetard).length;
         if (nbRetard > 0 && !rappelEnvoye.current) {
           rappelEnvoye.current = true;
@@ -187,6 +196,19 @@ export function NotesPage() {
     }
   }
 
+  async function annulerNoteListe(n: NoteResume) {
+    if (!confirm("Annuler cette facture ? Elle sera exclue des totaux."))
+      return;
+    setErreur(null);
+    try {
+      await annulerNote(n.id);
+      await rechargerNotes();
+      showToast("Facture annulée");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
   async function exporterNotesListeCsv() {
     setErreur(null);
     try {
@@ -200,9 +222,9 @@ export function NotesPage() {
     <section className="page">
       <header className="page-tete">
         <div>
-          <h2>Notes de frais</h2>
+          <h2>Factures</h2>
           <p className="page-sous">
-            {notes.length} note{notes.length > 1 ? "s" : ""}
+            {notes.length} facture{notes.length > 1 ? "s" : ""}
           </p>
         </div>
         <div className="page-actions">
@@ -212,7 +234,7 @@ export function NotesPage() {
 
       {(nbRetard > 0 || nbProche > 0) && (
         <div className="rappel-banner" role="status">
-          ⚠️ {nbRetard > 0 && <>{nbRetard} note(s) en retard</>}
+          ⚠️ {nbRetard > 0 && <>{nbRetard} facture(s) en retard</>}
           {nbRetard > 0 && nbProche > 0 && ", "}
           {nbProche > 0 && <>{nbProche} à échéance proche</>}.
         </div>
@@ -221,7 +243,7 @@ export function NotesPage() {
       {erreur && <p className="erreur">{erreur}</p>}
 
       <form className="carte-form" onSubmit={creer}>
-        <h3 className="form-titre">Nouvelle note</h3>
+        <h3 className="form-titre">Nouvelle facture</h3>
         <div className="champs">
           <label>
             <span>Client</span>
@@ -299,7 +321,7 @@ export function NotesPage() {
             Total : <strong>{formatMontant(totalApercu)}</strong>
           </span>
           <button type="submit" className="btn-primary">
-            Créer la note
+            Créer la facture
           </button>
         </div>
       </form>
@@ -336,13 +358,21 @@ export function NotesPage() {
                 <td className="cell-actions">
                   <button onClick={() => setSelection(n.id)}>Détail</button>
                   <button onClick={() => imprimerNoteListe(n)}>Imprimer</button>
+                  {n.statut !== "annulee" && (
+                    <button
+                      className="btn-danger"
+                      onClick={() => annulerNoteListe(n)}
+                    >
+                      Annuler
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
             {notes.length === 0 && (
               <tr>
                 <td colSpan={8} className="vide">
-                  Aucune note pour le moment.
+                  Aucune facture pour le moment.
                 </td>
               </tr>
             )}
@@ -353,6 +383,7 @@ export function NotesPage() {
       {selection !== null && (
         <DetailNote
           noteId={selection}
+          modes={modes}
           onFermer={() => setSelection(null)}
           onChangement={rechargerNotes}
           onRecu={setRecuAImprimer}
@@ -385,12 +416,14 @@ export function NotesPage() {
 
 function DetailNote({
   noteId,
+  modes,
   onFermer,
   onChangement,
   onRecu,
   onImprimer,
 }: {
   noteId: number;
+  modes: ModePaiement[];
   onFermer: () => void;
   onChangement: () => void;
   onRecu: (recu: RecuDetail) => void;
@@ -520,7 +553,7 @@ function DetailNote({
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal">
         <div className="modal-tete">
-          <h3>Note {detail.note.reference ?? `#${detail.note.id}`}</h3>
+          <h3>Facture {detail.note.reference ?? `#${detail.note.id}`}</h3>
           <button className="x" onClick={onFermer} aria-label="Fermer">
             ✕
           </button>
@@ -571,18 +604,24 @@ function DetailNote({
               value={datePaiement}
               onChange={(e) => setDatePaiement(e.target.value)}
             />
-            <input
-              placeholder="Mode (espèces, virement…)"
+            <select
               value={methode}
               onChange={(e) => setMethode(e.target.value)}
-            />
+            >
+              <option value="">— Mode —</option>
+              {modes.map((m) => (
+                <option key={m.id} value={m.libelle}>
+                  {m.libelle}
+                </option>
+              ))}
+            </select>
             <button type="submit" className="btn-primary">
               Encaisser
             </button>
           </form>
         ) : (
           <p className="paye-info">
-            <span className="badge badge-ok">Payée</span> Cette note est
+            <span className="badge badge-ok">Payée</span> Cette facture est
             entièrement réglée.
           </p>
         )}

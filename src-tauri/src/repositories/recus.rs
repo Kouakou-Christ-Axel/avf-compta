@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{Recu, RecuDetail};
+use crate::models::{Recu, RecuDetail, RecuResume};
 use rusqlite::{Connection, Row};
 
 fn map_row(row: &Row) -> rusqlite::Result<Recu> {
@@ -77,6 +77,54 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Recu>> {
 /// Nombre de reçus déjà émis (sert à la numérotation séquentielle).
 pub fn count(conn: &Connection) -> AppResult<i64> {
     Ok(conn.query_row("SELECT COUNT(*) FROM recus", [], |r| r.get(0))?)
+}
+
+/// Récapitulatif des reçus (avec client, montant, état annulé) pour la liste.
+pub fn list_resume(conn: &Connection) -> AppResult<Vec<RecuResume>> {
+    let mut stmt = conn.prepare(
+        "SELECT r.id, r.numero, r.emis_le, p.montant, p.annule, c.nom AS client_nom
+         FROM recus r
+         JOIN paiements p      ON p.id = r.paiement_id
+         JOIN notes_de_frais n ON n.id = p.note_id
+         JOIN clients c        ON c.id = n.client_id
+         ORDER BY r.id DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(RecuResume {
+            id: row.get("id")?,
+            numero: row.get("numero")?,
+            emis_le: row.get("emis_le")?,
+            client_nom: row.get("client_nom")?,
+            montant: row.get("montant")?,
+            annule: row.get::<_, i64>("annule")? != 0,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// Annule un reçu : annule le paiement lié et rouvre la note si besoin.
+pub fn annuler(conn: &Connection, recu_id: i64) -> AppResult<()> {
+    let paiement_id: i64 = conn
+        .query_row(
+            "SELECT paiement_id FROM recus WHERE id = ?1",
+            [recu_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("reçu {recu_id}")),
+            other => other.into(),
+        })?;
+    let note_id = super::paiements::annuler(conn, paiement_id)?;
+    // La note n'est plus soldée : on la remet à « emise » (sauf si annulée).
+    let statut: String = conn.query_row(
+        "SELECT statut FROM notes_de_frais WHERE id = ?1",
+        [note_id],
+        |r| r.get(0),
+    )?;
+    if statut != "annulee" {
+        super::notes::set_statut(conn, note_id, "emise")?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -88,7 +88,7 @@ export function noteDocDefinition(
         columns: [
           enteteCabinet(params),
           [
-            { text: "NOTE DE FRAIS", style: "titre", alignment: "right" },
+            { text: "FACTURE", style: "titre", alignment: "right" },
             { text: ref, alignment: "right", color: COULEUR, bold: true },
             {
               text: `Émise le ${detail.note.date_emission}`,
@@ -218,7 +218,7 @@ export function recuDocDefinition(
         table: {
           widths: ["*", "auto"],
           body: [
-            ["Note de frais", recu.note_reference ?? `#${recu.note_id}`],
+            ["Facture", recu.note_reference ?? `#${recu.note_id}`],
             ["Date du paiement", recu.date_paiement.slice(0, 10)],
             ...(recu.methode ? [["Mode de règlement", recu.methode]] : []),
           ],

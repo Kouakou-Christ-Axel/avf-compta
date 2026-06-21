@@ -34,3 +34,9 @@ pub fn delete_note(state: State<'_, DbState>, id: i64) -> AppResult<()> {
     let conn = state.lock().unwrap();
     notes::delete(&conn, id)
 }
+
+#[tauri::command]
+pub fn annuler_note(state: State<'_, DbState>, id: i64) -> AppResult<()> {
+    let conn = state.lock().unwrap();
+    notes::annuler(&conn, id)
+}

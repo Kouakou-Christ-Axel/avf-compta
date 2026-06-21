@@ -51,7 +51,7 @@ export function RecuImprimable({
 
           <section className="recu-bloc">
             <div className="recu-ligne">
-              <span>Note de frais</span>
+              <span>Facture</span>
               <span>{recu.note_reference ?? `#${recu.note_id}`}</span>
             </div>
             <div className="recu-ligne">

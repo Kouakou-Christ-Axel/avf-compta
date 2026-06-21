@@ -18,7 +18,7 @@ pub struct NewClient {
     pub adresse: Option<String>,
 }
 
-/// Récapitulatif par client : cumul facturé (notes), cumul payé, restant.
+/// Récapitulatif par client : cumul facturé (notes), cumul payé, restant, marge.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ClientResume {
     pub id: i64,
@@ -28,4 +28,6 @@ pub struct ClientResume {
     pub total_facture: i64,
     pub total_paye: i64,
     pub solde: i64,
+    pub total_depenses: i64,
+    pub marge: i64,
 }

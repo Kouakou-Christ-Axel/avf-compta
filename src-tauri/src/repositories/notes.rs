@@ -48,7 +48,7 @@ pub fn list_resume(conn: &Connection) -> AppResult<Vec<NoteResume>> {
                 COALESCE((SELECT SUM(prix_snapshot * quantite)
                           FROM note_lignes l WHERE l.note_id = n.id), 0) AS total,
                 COALESCE((SELECT SUM(montant)
-                          FROM paiements p WHERE p.note_id = n.id), 0) AS paye
+                          FROM paiements p WHERE p.note_id = n.id AND p.annule = 0), 0) AS paye
          FROM notes_de_frais n
          ORDER BY n.date_emission DESC, n.id DESC",
     )?;
@@ -120,6 +120,11 @@ pub fn delete(conn: &Connection, id: i64) -> AppResult<()> {
         return Err(AppError::NotFound(format!("note {id}")));
     }
     Ok(())
+}
+
+/// Annule une note (statut « annulee ») ; elle est exclue des totaux/stats.
+pub fn annuler(conn: &Connection, id: i64) -> AppResult<()> {
+    set_statut(conn, id, "annulee")
 }
 
 #[cfg(test)]

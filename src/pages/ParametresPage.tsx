@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
-import { getParametres, saveParametres } from "../api/client";
-import type { Parametres } from "../api/types";
+import {
+  getParametres,
+  saveParametres,
+  listModesPaiement,
+  createModePaiement,
+  deleteModePaiement,
+} from "../api/client";
+import type { Parametres, ModePaiement } from "../api/types";
 import { useToast } from "../components/toast-context";
 import { MisesAJour } from "../components/MisesAJour";
 
@@ -17,12 +23,50 @@ export function ParametresPage() {
   const { showToast } = useToast();
   const [p, setP] = useState<Parametres>(VIDE);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [modes, setModes] = useState<ModePaiement[]>([]);
+  const [nouveauMode, setNouveauMode] = useState("");
 
   useEffect(() => {
     getParametres()
       .then((v) => setP({ ...VIDE, ...v }))
       .catch((e) => setErreur(String(e)));
+    chargerModes();
   }, []);
+
+  function chargerModes() {
+    listModesPaiement()
+      .then(setModes)
+      .catch((e) => setErreur(String(e)));
+  }
+
+  async function ajouterMode(e: React.FormEvent) {
+    e.preventDefault();
+    setErreur(null);
+    const libelle = nouveauMode.trim();
+    if (!libelle) {
+      setErreur("Le libellé du mode est obligatoire.");
+      return;
+    }
+    try {
+      await createModePaiement(libelle);
+      setNouveauMode("");
+      chargerModes();
+      showToast("Mode ajouté");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
+  async function supprimerMode(id: number) {
+    setErreur(null);
+    try {
+      await deleteModePaiement(id);
+      chargerModes();
+      showToast("Mode supprimé");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
 
   function maj<K extends keyof Parametres>(cle: K, valeur: Parametres[K]) {
     setP((prev) => ({ ...prev, [cle]: valeur }));
@@ -152,6 +196,59 @@ export function ParametresPage() {
           Enregistrer
         </button>
       </form>
+
+      <div className="carte-form">
+        <h3 className="form-titre">Modes de paiement</h3>
+
+        <form className="champs" onSubmit={ajouterMode}>
+          <label>
+            <span>Nouveau mode (ex: Espèces, Virement, Wave…)</span>
+            <input
+              placeholder="Ex : Espèces, Virement, Wave…"
+              value={nouveauMode}
+              onChange={(e) => setNouveauMode(e.target.value)}
+            />
+          </label>
+          <button type="submit" className="btn-primary">
+            Ajouter
+          </button>
+        </form>
+
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Mode</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {modes.length === 0 ? (
+                <tr>
+                  <td colSpan={2} className="vide">
+                    Aucun mode défini.
+                  </td>
+                </tr>
+              ) : (
+                modes.map((m) => (
+                  <tr key={m.id}>
+                    <td>{m.libelle}</td>
+                    <td className="cell-actions">
+                      <button
+                        type="button"
+                        className="btn-danger"
+                        onClick={() => supprimerMode(m.id)}
+                      >
+                        Supprimer
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <MisesAJour />
     </section>
