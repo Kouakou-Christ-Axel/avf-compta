@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   annulerNote,
   createDepense,
@@ -32,7 +32,9 @@ import type {
 } from "../api/types";
 import { RecuImprimable } from "../components/RecuImprimable";
 import { NoteImprimable } from "../components/NoteImprimable";
+import { BarreRecherche } from "../components/BarreRecherche";
 import { useToast } from "../components/toast-context";
+import { correspond } from "../utils/recherche";
 
 function aujourdhui(): string {
   return new Date().toISOString().slice(0, 10);
@@ -67,6 +69,11 @@ async function notifierRetards(nb: number) {
   }
 }
 
+function libelleStatut(statut: string): string {
+  if (statut === "annulee") return "Annulée";
+  return statut === "payee" ? "Payée" : "En attente";
+}
+
 function badgeStatut(statut: string) {
   if (statut === "annulee") {
     return <span className="badge badge-retard">Annulée</span>;
@@ -87,6 +94,7 @@ export function NotesPage() {
   const [params, setParams] = useState<Parametres | null>(null);
   const [modes, setModes] = useState<ModePaiement[]>([]);
   const [selection, setSelection] = useState<number | null>(null);
+  const [recherche, setRecherche] = useState("");
   const [recuAImprimer, setRecuAImprimer] = useState<RecuDetail | null>(null);
   const [noteAImprimer, setNoteAImprimer] = useState<{
     detail: NoteDetail;
@@ -178,6 +186,23 @@ export function NotesPage() {
   const nbRetard = notes.filter(estEnRetard).length;
   const nbProche = notes.filter(estEcheanceProche).length;
 
+  const notesFiltrees = useMemo(
+    () =>
+      notes.filter((n) =>
+        correspond(
+          [
+            n.reference ?? `#${n.id}`,
+            n.client_nom,
+            n.date_emission,
+            n.echeance,
+            libelleStatut(n.statut),
+          ],
+          recherche,
+        ),
+      ),
+    [notes, recherche],
+  );
+
   const noteSelectionnee = notes.find((n) => n.id === selection);
   const clientSelectionne =
     clients.find((c) => c.id === noteSelectionnee?.client_id)?.nom ?? "Client";
@@ -224,7 +249,8 @@ export function NotesPage() {
         <div>
           <h2>Factures</h2>
           <p className="page-sous">
-            {notes.length} facture{notes.length > 1 ? "s" : ""}
+            {notesFiltrees.length} facture{notesFiltrees.length > 1 ? "s" : ""}
+            {recherche && ` sur ${notes.length}`}
           </p>
         </div>
         <div className="page-actions">
@@ -326,6 +352,12 @@ export function NotesPage() {
         </div>
       </form>
 
+      <BarreRecherche
+        valeur={recherche}
+        onChange={setRecherche}
+        placeholder="Rechercher une facture (réf., client, statut, date)…"
+      />
+
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -342,7 +374,7 @@ export function NotesPage() {
             </tr>
           </thead>
           <tbody>
-            {notes.map((n) => (
+            {notesFiltrees.map((n) => (
               <tr key={n.id}>
                 <td className="cell-fort">{n.reference ?? `#${n.id}`}</td>
                 <td>{n.client_nom}</td>
@@ -371,10 +403,12 @@ export function NotesPage() {
                 </td>
               </tr>
             ))}
-            {notes.length === 0 && (
+            {notesFiltrees.length === 0 && (
               <tr>
                 <td colSpan={9} className="vide">
-                  Aucune facture pour le moment.
+                  {notes.length === 0
+                    ? "Aucune facture pour le moment."
+                    : "Aucune facture ne correspond à la recherche."}
                 </td>
               </tr>
             )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createPrestation,
   deletePrestation,
@@ -6,12 +6,20 @@ import {
 } from "../api/client";
 import { formatMontant, parseMontant } from "../api/money";
 import type { Prestation } from "../api/types";
+import { BarreRecherche } from "../components/BarreRecherche";
+import { correspond } from "../utils/recherche";
 
 export function PrestationsPage() {
   const [prestations, setPrestations] = useState<Prestation[]>([]);
   const [libelle, setLibelle] = useState("");
   const [prix, setPrix] = useState("");
+  const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+
+  const prestationsFiltrees = useMemo(
+    () => prestations.filter((p) => correspond([p.libelle], recherche)),
+    [prestations, recherche],
+  );
 
   async function recharger() {
     setPrestations(await listPrestations());
@@ -55,7 +63,9 @@ export function PrestationsPage() {
         <div>
           <h2>Prestations</h2>
           <p className="page-sous">
-            {prestations.length} prestation{prestations.length > 1 ? "s" : ""}
+            {prestationsFiltrees.length} prestation
+            {prestationsFiltrees.length > 1 ? "s" : ""}
+            {recherche && ` sur ${prestations.length}`}
           </p>
         </div>
       </header>
@@ -89,6 +99,12 @@ export function PrestationsPage() {
         </button>
       </form>
 
+      <BarreRecherche
+        valeur={recherche}
+        onChange={setRecherche}
+        placeholder="Rechercher une prestation…"
+      />
+
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -99,7 +115,7 @@ export function PrestationsPage() {
             </tr>
           </thead>
           <tbody>
-            {prestations.map((p) => (
+            {prestationsFiltrees.map((p) => (
               <tr key={p.id}>
                 <td className="cell-fort">{p.libelle}</td>
                 <td className="col-montant">{formatMontant(p.prix)}</td>
@@ -113,10 +129,12 @@ export function PrestationsPage() {
                 </td>
               </tr>
             ))}
-            {prestations.length === 0 && (
+            {prestationsFiltrees.length === 0 && (
               <tr>
                 <td colSpan={3} className="vide">
-                  Aucune prestation pour le moment.
+                  {prestations.length === 0
+                    ? "Aucune prestation pour le moment."
+                    : "Aucune prestation ne correspond à la recherche."}
                 </td>
               </tr>
             )}

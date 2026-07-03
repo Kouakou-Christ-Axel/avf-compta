@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient, deleteClient, listClientsResume } from "../api/client";
 import {
   exporterClientsCsv,
@@ -8,7 +8,9 @@ import {
 import type { ClientResume } from "../api/types";
 import { formatMontant } from "../api/money";
 import { CopyText } from "../components/CopyText";
+import { BarreRecherche } from "../components/BarreRecherche";
 import { useToast } from "../components/toast-context";
+import { correspond } from "../utils/recherche";
 
 export function ClientsPage() {
   const { showToast } = useToast();
@@ -16,7 +18,16 @@ export function ClientsPage() {
   const [nom, setNom] = useState("");
   const [email, setEmail] = useState("");
   const [telephone, setTelephone] = useState("");
+  const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+
+  const clientsFiltres = useMemo(
+    () =>
+      clients.filter((c) =>
+        correspond([c.nom, c.email, c.telephone], recherche),
+      ),
+    [clients, recherche],
+  );
 
   async function recharger() {
     setClients(await listClientsResume());
@@ -92,7 +103,8 @@ export function ClientsPage() {
         <div>
           <h2>Clients</h2>
           <p className="page-sous">
-            {clients.length} client{clients.length > 1 ? "s" : ""}
+            {clientsFiltres.length} client{clientsFiltres.length > 1 ? "s" : ""}
+            {recherche && ` sur ${clients.length}`}
           </p>
         </div>
         <div className="page-actions">
@@ -138,6 +150,12 @@ export function ClientsPage() {
         </button>
       </form>
 
+      <BarreRecherche
+        valeur={recherche}
+        onChange={setRecherche}
+        placeholder="Rechercher un client (nom, email, téléphone)…"
+      />
+
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -153,7 +171,7 @@ export function ClientsPage() {
             </tr>
           </thead>
           <tbody>
-            {clients.map((c) => (
+            {clientsFiltres.map((c) => (
               <tr key={c.id}>
                 <td className="cell-fort">{c.nom}</td>
                 <td>{c.email ? <CopyText value={c.email} /> : "—"}</td>
@@ -174,10 +192,12 @@ export function ClientsPage() {
                 </td>
               </tr>
             ))}
-            {clients.length === 0 && (
+            {clientsFiltres.length === 0 && (
               <tr>
                 <td colSpan={8} className="vide">
-                  Aucun client pour le moment.
+                  {clients.length === 0
+                    ? "Aucun client pour le moment."
+                    : "Aucun client ne correspond à la recherche."}
                 </td>
               </tr>
             )}

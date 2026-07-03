@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createDepense,
   deleteDepense,
@@ -9,7 +9,9 @@ import {
 import { exporterDepensesCsv } from "../api/exports";
 import { formatMontant, parseMontant } from "../api/money";
 import type { ClientResume, DepenseLigne, NoteResume } from "../api/types";
+import { BarreRecherche } from "../components/BarreRecherche";
 import { useToast } from "../components/toast-context";
+import { correspond } from "../utils/recherche";
 
 export function DepensesPage() {
   const { showToast } = useToast();
@@ -20,7 +22,19 @@ export function DepensesPage() {
   const [libelle, setLibelle] = useState("");
   const [montant, setMontant] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+
+  const depensesFiltrees = useMemo(
+    () =>
+      depenses.filter((d) =>
+        correspond(
+          [d.libelle, d.note_reference ?? `#${d.note_id}`, d.date_depense],
+          recherche,
+        ),
+      ),
+    [depenses, recherche],
+  );
 
   async function recharger() {
     setDepenses(await listAllDepenses());
@@ -94,7 +108,7 @@ export function DepensesPage() {
     }
   }
 
-  const total = depenses.reduce((acc, d) => acc + d.montant, 0);
+  const total = depensesFiltrees.reduce((acc, d) => acc + d.montant, 0);
 
   return (
     <section className="page">
@@ -102,7 +116,9 @@ export function DepensesPage() {
         <div>
           <h2>Dépenses</h2>
           <p className="page-sous">
-            {depenses.length} dépense{depenses.length > 1 ? "s" : ""}
+            {depensesFiltrees.length} dépense
+            {depensesFiltrees.length > 1 ? "s" : ""}
+            {recherche && ` sur ${depenses.length}`}
           </p>
         </div>
         <div className="page-actions">
@@ -163,6 +179,12 @@ export function DepensesPage() {
         </button>
       </form>
 
+      <BarreRecherche
+        valeur={recherche}
+        onChange={setRecherche}
+        placeholder="Rechercher une dépense (libellé, facture, date)…"
+      />
+
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -175,7 +197,7 @@ export function DepensesPage() {
             </tr>
           </thead>
           <tbody>
-            {depenses.map((d) => (
+            {depensesFiltrees.map((d) => (
               <tr key={d.id}>
                 <td className="cell-fort">
                   {d.note_reference ?? `#${d.note_id}`}
@@ -193,10 +215,12 @@ export function DepensesPage() {
                 </td>
               </tr>
             ))}
-            {depenses.length === 0 && (
+            {depensesFiltrees.length === 0 && (
               <tr>
                 <td colSpan={5} className="vide">
-                  Aucune dépense pour le moment.
+                  {depenses.length === 0
+                    ? "Aucune dépense pour le moment."
+                    : "Aucune dépense ne correspond à la recherche."}
                 </td>
               </tr>
             )}

@@ -199,6 +199,11 @@ button {
   font-size: 0.9rem;
 }
 
+.recherche-barre {
+  margin-bottom: 1rem;
+  max-width: 320px;
+}
+
 .sous-titre {
   margin: 1.4rem 0 0.6rem;
 }
