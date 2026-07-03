@@ -8,6 +8,7 @@ fn map_row(row: &Row) -> rusqlite::Result<Recu> {
         paiement_id: row.get("paiement_id")?,
         numero: row.get("numero")?,
         emis_le: row.get("emis_le")?,
+        annule: row.get::<_, i64>("annule")? != 0,
     })
 }
 
@@ -15,7 +16,7 @@ fn map_row(row: &Row) -> rusqlite::Result<Recu> {
 pub fn detail(conn: &Connection, id: i64) -> AppResult<RecuDetail> {
     let mut recu = conn
         .query_row(
-            "SELECT r.id, r.numero, r.emis_le,
+            "SELECT r.id, r.numero, r.emis_le, r.annule,
                 p.montant, p.date_paiement, p.methode,
                 n.id AS note_id, n.reference AS note_reference,
                 c.nom AS client_nom, c.email AS client_email,
@@ -34,6 +35,7 @@ pub fn detail(conn: &Connection, id: i64) -> AppResult<RecuDetail> {
                     montant: row.get("montant")?,
                     date_paiement: row.get("date_paiement")?,
                     methode: row.get("methode")?,
+                    annule: row.get::<_, i64>("annule")? != 0,
                     note_id: row.get("note_id")?,
                     note_reference: row.get("note_reference")?,
                     client_nom: row.get("client_nom")?,
@@ -82,7 +84,7 @@ pub fn count(conn: &Connection) -> AppResult<i64> {
 /// Récapitulatif des reçus (avec client, montant, état annulé) pour la liste.
 pub fn list_resume(conn: &Connection) -> AppResult<Vec<RecuResume>> {
     let mut stmt = conn.prepare(
-        "SELECT r.id, r.numero, r.emis_le, p.montant, p.annule, c.nom AS client_nom
+        "SELECT r.id, r.numero, r.emis_le, r.annule, p.montant, c.nom AS client_nom
          FROM recus r
          JOIN paiements p      ON p.id = r.paiement_id
          JOIN notes_de_frais n ON n.id = p.note_id
@@ -114,6 +116,7 @@ pub fn annuler(conn: &Connection, recu_id: i64) -> AppResult<()> {
             rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("reçu {recu_id}")),
             other => other.into(),
         })?;
+    conn.execute("UPDATE recus SET annule = 1 WHERE id = ?1", [recu_id])?;
     let note_id = super::paiements::annuler(conn, paiement_id)?;
     // La note n'est plus soldée : on la remet à « emise » (sauf si annulée).
     let statut: String = conn.query_row(
@@ -189,6 +192,66 @@ mod tests {
         assert_eq!(d.client_telephone.as_deref(), Some("0102030405"));
         assert_eq!(d.note_reference.as_deref(), Some("26-06-0001"));
         assert_eq!(d.methode.as_deref(), Some("espèces"));
+        assert!(!d.annule);
+    }
+
+    /// Annuler un reçu marque ce reçu précis comme annulé (colonne propre à
+    /// `recus`), pas seulement le paiement partagé — sinon un nouveau reçu
+    /// généré plus tard sur un autre paiement pourrait être affecté à tort.
+    #[test]
+    fn annuler_marque_le_recu_lui_meme() {
+        let mut conn = open_in_memory().unwrap();
+        let client = clients::create(
+            &conn,
+            &NewClient {
+                nom: "Acme".into(),
+                email: None,
+                telephone: None,
+                adresse: None,
+            },
+        )
+        .unwrap();
+        let presta = prestations::create(
+            &conn,
+            &NewPrestation {
+                libelle: "Conseil".into(),
+                prix: 50_000,
+            },
+        )
+        .unwrap();
+        let note = notes_service::create_note(
+            &mut conn,
+            &NewNote {
+                client_id: client,
+                date_emission: "2026-06-18".into(),
+                echeance: None,
+                lignes: vec![NewNoteLigne {
+                    prestation_id: presta,
+                    quantite: 1,
+                }],
+            },
+        )
+        .unwrap();
+        let paiement = paiements_service::enregistrer(
+            &conn,
+            &NewPaiement {
+                note_id: note,
+                montant: 50_000,
+                date_paiement: "2026-06-18".into(),
+                methode: None,
+            },
+        )
+        .unwrap();
+        let recu = recus_service::generer(&conn, paiement).unwrap();
+
+        annuler(&conn, recu.id).unwrap();
+
+        let d = detail(&conn, recu.id).unwrap();
+        assert!(d.annule);
+
+        let r = list_resume(&conn).unwrap();
+        assert_eq!(r.len(), 1);
+        assert!(r[0].annule);
     }
 
     #[test]

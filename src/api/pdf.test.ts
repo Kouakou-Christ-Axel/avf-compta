@@ -62,6 +62,7 @@ describe("recuDocDefinition", () => {
       montant: 100000,
       date_paiement: "2026-06-19",
       methode: "espèces",
+      annule: false,
       note_id: 1,
       note_reference: "26-06-0001",
       client_nom: "Acme SARL",

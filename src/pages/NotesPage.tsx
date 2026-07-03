@@ -331,6 +331,7 @@ export function NotesPage() {
           <thead>
             <tr>
               <th>Réf.</th>
+              <th>Client</th>
               <th>Date</th>
               <th>Statut</th>
               <th>Échéance</th>
@@ -344,6 +345,7 @@ export function NotesPage() {
             {notes.map((n) => (
               <tr key={n.id}>
                 <td className="cell-fort">{n.reference ?? `#${n.id}`}</td>
+                <td>{n.client_nom}</td>
                 <td>{n.date_emission}</td>
                 <td>{badgeStatut(n.statut)}</td>
                 <td>
@@ -371,7 +373,7 @@ export function NotesPage() {
             ))}
             {notes.length === 0 && (
               <tr>
-                <td colSpan={8} className="vide">
+                <td colSpan={9} className="vide">
                   Aucune facture pour le moment.
                 </td>
               </tr>
@@ -644,7 +646,11 @@ function DetailNote({
                   <td className="col-montant">{formatMontant(p.montant)}</td>
                   <td>{p.methode ?? "—"}</td>
                   <td className="cell-actions">
-                    <button onClick={() => imprimerRecu(p.id)}>Reçu</button>
+                    {p.annule ? (
+                      <span className="badge badge-retard">Annulé</span>
+                    ) : (
+                      <button onClick={() => imprimerRecu(p.id)}>Reçu</button>
+                    )}
                   </td>
                 </tr>
               ))}

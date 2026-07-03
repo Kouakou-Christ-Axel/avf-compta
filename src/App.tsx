@@ -21,16 +21,37 @@ const ONGLETS = [
 
 type OngletId = (typeof ONGLETS)[number]["id"];
 
+const CLE_SIDEBAR_REPLIEE = "sidebar-repliee";
+
 function App() {
   const [onglet, setOnglet] = useState<OngletId>("stats");
+  const [repliee, setRepliee] = useState(
+    () => localStorage.getItem(CLE_SIDEBAR_REPLIEE) === "1",
+  );
+
+  function basculerSidebar() {
+    setRepliee((v) => {
+      const suivant = !v;
+      localStorage.setItem(CLE_SIDEBAR_REPLIEE, suivant ? "1" : "0");
+      return suivant;
+    });
+  }
 
   return (
     <ToastProvider>
       <div className="app">
-        <aside className="sidebar">
+        <aside className={repliee ? "sidebar repliee" : "sidebar"}>
           <div className="marque">
             <span className="marque-logo">A</span>
-            <span className="marque-nom">avf-compta</span>
+            {!repliee && <span className="marque-nom">avf-compta</span>}
+            <button
+              className="sidebar-bascule"
+              onClick={basculerSidebar}
+              title={repliee ? "Déplier le menu" : "Replier le menu"}
+              aria-label={repliee ? "Déplier le menu" : "Replier le menu"}
+            >
+              {repliee ? "»" : "«"}
+            </button>
           </div>
           <nav>
             {ONGLETS.map((o) => (
@@ -38,15 +59,16 @@ function App() {
                 key={o.id}
                 className={o.id === onglet ? "nav-item actif" : "nav-item"}
                 onClick={() => setOnglet(o.id)}
+                title={repliee ? o.label : undefined}
               >
                 <span className="nav-icone" aria-hidden>
                   {o.icone}
                 </span>
-                {o.label}
+                {!repliee && o.label}
               </button>
             ))}
           </nav>
-          <div className="sidebar-pied">Devise : FCFA (XOF)</div>
+          {!repliee && <div className="sidebar-pied">Devise : FCFA (XOF)</div>}
         </aside>
 
         <main className="content">

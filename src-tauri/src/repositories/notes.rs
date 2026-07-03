@@ -44,12 +44,14 @@ pub fn list(conn: &Connection) -> AppResult<Vec<NoteDeFrais>> {
 /// restant), pour le tableau de bord des notes.
 pub fn list_resume(conn: &Connection) -> AppResult<Vec<NoteResume>> {
     let mut stmt = conn.prepare(
-        "SELECT n.id, n.client_id, n.reference, n.date_emission, n.statut, n.echeance,
+        "SELECT n.id, n.client_id, c.nom AS client_nom, n.reference, n.date_emission,
+                n.statut, n.echeance,
                 COALESCE((SELECT SUM(prix_snapshot * quantite)
                           FROM note_lignes l WHERE l.note_id = n.id), 0) AS total,
                 COALESCE((SELECT SUM(montant)
                           FROM paiements p WHERE p.note_id = n.id AND p.annule = 0), 0) AS paye
          FROM notes_de_frais n
+         JOIN clients c ON c.id = n.client_id
          ORDER BY n.date_emission DESC, n.id DESC",
     )?;
     let rows = stmt.query_map([], |row| {
@@ -58,6 +60,7 @@ pub fn list_resume(conn: &Connection) -> AppResult<Vec<NoteResume>> {
         Ok(NoteResume {
             id: row.get("id")?,
             client_id: row.get("client_id")?,
+            client_nom: row.get("client_nom")?,
             reference: row.get("reference")?,
             date_emission: row.get("date_emission")?,
             statut: row.get("statut")?,
@@ -183,6 +186,7 @@ mod tests {
 
         let resume = list_resume(&conn).unwrap();
         assert_eq!(resume.len(), 1);
+        assert_eq!(resume[0].client_nom, "Acme");
         assert_eq!(resume[0].total, 30_000);
         assert_eq!(resume[0].paye, 12_000);
         assert_eq!(resume[0].solde, 18_000);

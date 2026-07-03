@@ -17,6 +17,11 @@ export function RecuImprimable({
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal">
         <div className="recu-print">
+          {recu.annule && (
+            <div className="filigrane-annule" aria-hidden="true">
+              ANNULÉ
+            </div>
+          )}
           <header className="recu-tete">
             <div className="recu-cabinet-bloc">
               {params?.logo && (

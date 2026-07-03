@@ -1,4 +1,4 @@
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::models::Recu;
 use crate::repositories::{paiements, recus};
 use rusqlite::Connection;
@@ -7,7 +7,15 @@ use rusqlite::Connection;
 /// (`RECU-0001`, `RECU-0002`, …).
 pub fn generer(conn: &Connection, paiement_id: i64) -> AppResult<Recu> {
     // Vérifie que le paiement existe (sinon NotFound).
-    paiements::get(conn, paiement_id)?;
+    let paiement = paiements::get(conn, paiement_id)?;
+
+    // Un paiement annulé ne peut pas donner lieu à un nouveau reçu valide :
+    // l'argent correspondant n'a pas été perçu.
+    if paiement.annule {
+        return Err(AppError::Validation(
+            "impossible de générer un reçu : le paiement associé est annulé".into(),
+        ));
+    }
 
     let numero = format!("RECU-{:04}", recus::count(conn)? + 1);
     let id = recus::insert(conn, paiement_id, &numero)?;
@@ -83,5 +91,22 @@ mod tests {
     fn fails_for_unknown_payment() {
         let conn = open_in_memory().unwrap();
         assert!(matches!(generer(&conn, 999), Err(AppError::NotFound(_))));
+    }
+
+    #[test]
+    fn generer_rejette_si_paiement_annule() {
+        let mut conn = open_in_memory().unwrap();
+        let paiement_id = seed_paiement(&mut conn);
+
+        // Génère un premier reçu, puis l'annule (ce qui annule le paiement).
+        let recu1 = generer(&conn, paiement_id).unwrap();
+        recus::annuler(&conn, recu1.id).unwrap();
+
+        // Toute nouvelle génération pour ce même paiement doit être rejetée.
+        let err = generer(&conn, paiement_id).unwrap_err();
+        match err {
+            AppError::Validation(msg) => assert!(msg.contains("annulé")),
+            other => panic!("expected Validation error, got {other:?}"),
+        }
     }
 }

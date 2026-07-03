@@ -111,6 +111,10 @@ pub fn migrations() -> Migrations<'static> {
         );
         "#,
         ),
+        // v8 : annulation propre à chaque reçu (indépendante du paiement lié,
+        // pour qu'un nouveau reçu ne « hérite » pas de l'annulation d'un
+        // paiement déjà annulé par un reçu précédent).
+        M::up(r#"ALTER TABLE recus ADD COLUMN annule INTEGER NOT NULL DEFAULT 0;"#),
     ])
 }
 
