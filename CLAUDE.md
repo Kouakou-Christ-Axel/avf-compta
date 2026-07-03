@@ -105,6 +105,14 @@ expects exactly this.
 
 - `.github/workflows/ci.yml` runs on every push/PR: a Rust job (fmt, clippy,
   tests) and a frontend job (typecheck, lint, prettier, vitest).
+- `.github/workflows/auto-tag.yml` runs on every push to `master` (i.e. after
+  a PR merge): `scripts/next-version.mjs` inspects the Conventional Commit
+  subjects/bodies since the last `v*` tag (or the whole history if there is
+  none yet) and picks the strongest bump — `fix:`/`perf:` → patch, `feat:` →
+  minor, `!` or a `BREAKING CHANGE:` footer → major. If nothing qualifies
+  (only `chore:`/`docs:`/etc.), no tag is created. Otherwise it pushes
+  `vX.Y.Z`, which triggers `release.yml` below. To skip a release for a given
+  merge, just don't use a `feat:`/`fix:`/`perf:`/breaking commit type.
 - `.github/workflows/release.yml` runs on tags `v*` on a `windows-latest`
   runner: syncs the version into the three manifests via
   `scripts/set-version.mjs`, then `tauri-action` builds the Windows bundles
@@ -112,7 +120,9 @@ expects exactly this.
 - **Version single source of truth is the git tag.** `package.json`,
   `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` stay at the `0.1.0` dev
   placeholder; the release workflow rewrites them at build time (not committed
-  back). Release flow: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+  back). Tags are created automatically by `auto-tag.yml`; a manual
+  `git tag vX.Y.Z && git push origin vX.Y.Z` still works if you need to force
+  a specific version (e.g. to correct history).
 - Conventional-commit messages (`feat:`/`fix:`/`chore:`) + hand-maintained
   `CHANGELOG.md`.
 - **In-app updates** via `tauri-plugin-updater` (desktop): the app checks
