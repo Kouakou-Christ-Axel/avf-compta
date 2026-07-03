@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   annulerRecu,
   getParametres,
@@ -8,15 +8,26 @@ import {
 import { exporterRecusCsv } from "../api/exports";
 import { formatMontant } from "../api/money";
 import type { Parametres, RecuDetail, RecuResume } from "../api/types";
+import { BarreRecherche } from "../components/BarreRecherche";
 import { RecuImprimable } from "../components/RecuImprimable";
 import { useToast } from "../components/toast-context";
+import { correspond } from "../utils/recherche";
 
 export function RecusPage() {
   const { showToast } = useToast();
   const [recus, setRecus] = useState<RecuResume[]>([]);
   const [params, setParams] = useState<Parametres | null>(null);
   const [apercu, setApercu] = useState<RecuDetail | null>(null);
+  const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+
+  const recusFiltres = useMemo(
+    () =>
+      recus.filter((r) =>
+        correspond([r.numero, r.client_nom, r.emis_le.slice(0, 10)], recherche),
+      ),
+    [recus, recherche],
+  );
 
   async function recharger() {
     setRecus(await listRecusResume());
@@ -67,7 +78,8 @@ export function RecusPage() {
         <div>
           <h2>Reçus</h2>
           <p className="page-sous">
-            {recus.length} reçu{recus.length > 1 ? "s" : ""}
+            {recusFiltres.length} reçu{recusFiltres.length > 1 ? "s" : ""}
+            {recherche && ` sur ${recus.length}`}
           </p>
         </div>
         <div className="page-actions">
@@ -76,6 +88,12 @@ export function RecusPage() {
       </header>
 
       {erreur && <p className="erreur">{erreur}</p>}
+
+      <BarreRecherche
+        valeur={recherche}
+        onChange={setRecherche}
+        placeholder="Rechercher un reçu (numéro, client, date)…"
+      />
 
       <div className="table-wrap">
         <table className="table">
@@ -89,7 +107,7 @@ export function RecusPage() {
             </tr>
           </thead>
           <tbody>
-            {recus.map((r) => (
+            {recusFiltres.map((r) => (
               <tr key={r.id}>
                 <td className="cell-fort">
                   {r.numero}
@@ -113,10 +131,12 @@ export function RecusPage() {
                 </td>
               </tr>
             ))}
-            {recus.length === 0 && (
+            {recusFiltres.length === 0 && (
               <tr>
                 <td colSpan={5} className="vide">
-                  Aucun reçu pour le moment.
+                  {recus.length === 0
+                    ? "Aucun reçu pour le moment."
+                    : "Aucun reçu ne correspond à la recherche."}
                 </td>
               </tr>
             )}
