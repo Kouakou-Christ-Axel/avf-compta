@@ -186,14 +186,13 @@ export function NotesPage() {
   const nbRetard = notes.filter(estEnRetard).length;
   const nbProche = notes.filter(estEcheanceProche).length;
 
-  const nomClientNote = new Map(clients.map((c) => [c.id, c.nom]));
   const notesFiltrees = useMemo(
     () =>
       notes.filter((n) =>
         correspond(
           [
             n.reference ?? `#${n.id}`,
-            nomClientNote.get(n.client_id),
+            n.client_nom,
             n.date_emission,
             n.echeance,
             libelleStatut(n.statut),
@@ -201,8 +200,7 @@ export function NotesPage() {
           recherche,
         ),
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [notes, clients, recherche],
+    [notes, recherche],
   );
 
   const noteSelectionnee = notes.find((n) => n.id === selection);
@@ -365,6 +363,7 @@ export function NotesPage() {
           <thead>
             <tr>
               <th>Réf.</th>
+              <th>Client</th>
               <th>Date</th>
               <th>Statut</th>
               <th>Échéance</th>
@@ -378,6 +377,7 @@ export function NotesPage() {
             {notesFiltrees.map((n) => (
               <tr key={n.id}>
                 <td className="cell-fort">{n.reference ?? `#${n.id}`}</td>
+                <td>{n.client_nom}</td>
                 <td>{n.date_emission}</td>
                 <td>{badgeStatut(n.statut)}</td>
                 <td>
@@ -405,7 +405,7 @@ export function NotesPage() {
             ))}
             {notesFiltrees.length === 0 && (
               <tr>
-                <td colSpan={8} className="vide">
+                <td colSpan={9} className="vide">
                   {notes.length === 0
                     ? "Aucune facture pour le moment."
                     : "Aucune facture ne correspond à la recherche."}
@@ -680,7 +680,11 @@ function DetailNote({
                   <td className="col-montant">{formatMontant(p.montant)}</td>
                   <td>{p.methode ?? "—"}</td>
                   <td className="cell-actions">
-                    <button onClick={() => imprimerRecu(p.id)}>Reçu</button>
+                    {p.annule ? (
+                      <span className="badge badge-retard">Annulé</span>
+                    ) : (
+                      <button onClick={() => imprimerRecu(p.id)}>Reçu</button>
+                    )}
                   </td>
                 </tr>
               ))}

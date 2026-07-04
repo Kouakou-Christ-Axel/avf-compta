@@ -43,6 +43,8 @@ pub struct NoteDetail {
 pub struct NoteResume {
     pub id: i64,
     pub client_id: i64,
+    /// Nom du client (jointure), pour l'affichage direct dans la liste.
+    pub client_nom: String,
     pub reference: Option<String>,
     pub date_emission: String,
     pub statut: String,

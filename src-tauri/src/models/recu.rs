@@ -6,6 +6,7 @@ pub struct Recu {
     pub paiement_id: i64,
     pub numero: String,
     pub emis_le: String,
+    pub annule: bool,
 }
 
 /// Ligne du récapitulatif des reçus (liste), avec client et montant.
@@ -28,6 +29,9 @@ pub struct RecuDetail {
     pub montant: i64,
     pub date_paiement: String,
     pub methode: Option<String>,
+    /// Reçu annulé (indépendamment de l'état du paiement lié) : le reçu
+    /// doit s'afficher/s'imprimer avec le filigrane « ANNULÉ ».
+    pub annule: bool,
     pub note_id: i64,
     pub note_reference: Option<String>,
     pub client_nom: String,

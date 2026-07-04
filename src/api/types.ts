@@ -61,6 +61,7 @@ export interface NoteDetail {
 export interface NoteResume {
   id: number;
   client_id: number;
+  client_nom: string;
   reference: string | null;
   date_emission: string;
   statut: string;
@@ -149,6 +150,7 @@ export interface Recu {
   paiement_id: number;
   numero: string;
   emis_le: string;
+  annule: boolean;
 }
 
 export interface RecuDetail {
@@ -158,6 +160,7 @@ export interface RecuDetail {
   montant: number;
   date_paiement: string;
   methode: string | null;
+  annule: boolean;
   note_id: number;
   note_reference: string | null;
   client_nom: string;
