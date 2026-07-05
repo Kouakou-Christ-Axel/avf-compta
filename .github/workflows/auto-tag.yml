@@ -18,6 +18,9 @@ jobs:
   tag:
     name: Calcule et pousse le tag de version
     runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.version.outputs.skip }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,3 +59,17 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
+
+  # Appel direct de release.yml : le tag ci-dessus est poussé avec le
+  # GITHUB_TOKEN, qui ne redéclenche aucun workflow. On enchaîne donc la
+  # release dans le même run plutôt que de compter sur l'événement push:tags.
+  release:
+    name: Build et publie la release Windows
+    needs: tag
+    if: needs.tag.outputs.skip == 'false'
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+    secrets: inherit
+    permissions:
+      contents: write
