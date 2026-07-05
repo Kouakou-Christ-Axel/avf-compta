@@ -1,6 +1,16 @@
 name: Release
 
 on:
+  # Appelé par auto-tag.yml juste après la création du tag : un tag poussé avec
+  # le GITHUB_TOKEN par défaut ne déclenche PAS d'autre workflow (garde-fou
+  # anti-récursion de GitHub), d'où l'appel direct via workflow_call.
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag à publier (ex. v1.2.3)"
+        required: true
+        type: string
+  # Toujours utile pour un tag poussé manuellement (git tag vX && git push).
   push:
     tags:
       - "v*"
@@ -14,7 +24,10 @@ jobs:
     name: Build Windows (.msi + .exe)
     runs-on: windows-latest
     steps:
+      # En workflow_call le ref par défaut est master ; on force le tag.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -35,7 +48,7 @@ jobs:
       - name: Synchronise la version depuis le tag
         # set-version.mjs retire lui-même le préfixe « v » ; pas d'expansion
         # shell (cross-plateforme : le runner Windows utilise PowerShell).
-        run: node scripts/set-version.mjs ${{ github.ref_name }}
+        run: node scripts/set-version.mjs ${{ inputs.tag || github.ref_name }}
 
       - name: Build + publication de la release
         uses: tauri-apps/tauri-action@v0
@@ -46,8 +59,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "avf-compta ${{ github.ref_name }}"
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: "avf-compta ${{ inputs.tag || github.ref_name }}"
           releaseDraft: false
           prerelease: false
           args: --bundles msi,nsis

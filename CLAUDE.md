@@ -111,12 +111,18 @@ expects exactly this.
   none yet) and picks the strongest bump — `fix:`/`perf:` → patch, `feat:` →
   minor, `!` or a `BREAKING CHANGE:` footer → major. If nothing qualifies
   (only `chore:`/`docs:`/etc.), no tag is created. Otherwise it pushes
-  `vX.Y.Z`, which triggers `release.yml` below. To skip a release for a given
-  merge, just don't use a `feat:`/`fix:`/`perf:`/breaking commit type.
-- `.github/workflows/release.yml` runs on tags `v*` on a `windows-latest`
+  `vX.Y.Z` and then **calls `release.yml` directly** (see below) in the same
+  run. To skip a release for a given merge, just don't use a
+  `feat:`/`fix:`/`perf:`/breaking commit type.
+- `.github/workflows/release.yml` is a reusable workflow (`workflow_call`) that
+  also still fires on a manually pushed tag `v*`. It runs on a `windows-latest`
   runner: syncs the version into the three manifests via
   `scripts/set-version.mjs`, then `tauri-action` builds the Windows bundles
-  (`--bundles msi,nsis`) and drafts a GitHub Release.
+  (`--bundles msi,nsis`) and drafts a GitHub Release. **Why the direct call:** a
+  tag pushed by `auto-tag.yml` with the default `GITHUB_TOKEN` does *not*
+  re-trigger workflows (GitHub's anti-recursion guard), so relying on the
+  `push: tags` event alone left the tag created but no release built —
+  `auto-tag.yml` therefore invokes `release.yml` via `uses:` after tagging.
 - **Version single source of truth is the git tag.** `package.json`,
   `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` stay at the `0.1.0` dev
   placeholder; the release workflow rewrites them at build time (not committed
