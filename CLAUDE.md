@@ -119,7 +119,7 @@ expects exactly this.
   runner: syncs the version into the three manifests via
   `scripts/set-version.mjs`, then `tauri-action` builds the Windows bundles
   (`--bundles msi,nsis`) and drafts a GitHub Release. **Why the direct call:** a
-  tag pushed by `auto-tag.yml` with the default `GITHUB_TOKEN` does *not*
+  tag pushed by `auto-tag.yml` with the default `GITHUB_TOKEN` does _not_
   re-trigger workflows (GitHub's anti-recursion guard), so relying on the
   `push: tags` event alone left the tag created but no release built —
   `auto-tag.yml` therefore invokes `release.yml` via `uses:` after tagging.
