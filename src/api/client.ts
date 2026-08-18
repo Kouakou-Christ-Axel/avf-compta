@@ -61,6 +61,8 @@ export const listNotesResume = () => invoke<NoteResume[]>("list_notes_resume");
 export const getNote = (id: number) => invoke<NoteDetail>("get_note", { id });
 export const createNote = (note: NewNote) =>
   invoke<number>("create_note", { note });
+export const updateNote = (id: number, note: NewNote) =>
+  invoke<void>("update_note", { id, note });
 export const deleteNote = (id: number) => invoke<void>("delete_note", { id });
 export const annulerNote = (id: number) => invoke<void>("annuler_note", { id });
 
@@ -94,7 +96,9 @@ export const deleteDepense = (id: number) =>
   invoke<void>("delete_depense", { id });
 
 // --- Stats ---
-export const resumeStats = () => invoke<ResumeStats>("resume_stats");
+/** Récapitulatif, éventuellement borné à une période (dates ISO incluses). */
+export const resumeStats = (du?: string | null, au?: string | null) =>
+  invoke<ResumeStats>("resume_stats", { du: du || null, au: au || null });
 export const statsMensuelles = () => invoke<StatMois[]>("stats_mensuelles");
 
 // --- Modes de paiement ---
@@ -104,6 +108,15 @@ export const createModePaiement = (libelle: string) =>
   invoke<number>("create_mode_paiement", { libelle });
 export const deleteModePaiement = (id: number) =>
   invoke<void>("delete_mode_paiement", { id });
+
+// --- Sauvegarde de la base ---
+/** Écrit une copie de la base au chemin choisi. */
+export const sauvegarderBase = (chemin: string) =>
+  invoke<void>("sauvegarder_base", { chemin });
+/** Prépare la restauration ; elle prend effet au redémarrage. */
+export const restaurerBase = (chemin: string) =>
+  invoke<void>("restaurer_base", { chemin });
+export const cheminBase = () => invoke<string>("chemin_base");
 
 // --- Paramètres (profil du cabinet) ---
 export const getParametres = () => invoke<Parametres>("get_parametres");

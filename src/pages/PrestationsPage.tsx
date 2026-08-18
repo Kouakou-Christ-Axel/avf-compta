@@ -4,6 +4,7 @@ import {
   createPrestation,
   deletePrestation,
   listPrestations,
+  updatePrestation,
 } from "../api/client";
 import { formatMontant, parseMontant } from "../api/money";
 import type { Prestation } from "../api/types";
@@ -18,6 +19,10 @@ export function PrestationsPage() {
   const [prix, setPrix] = useState("");
   const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+  const [chargement, setChargement] = useState(true);
+  const [envoi, setEnvoi] = useState(false);
+  // Prestation en cours de modification (null = formulaire d'ajout).
+  const [edition, setEdition] = useState<Prestation | null>(null);
 
   const prestationsFiltrees = useMemo(
     () => prestations.filter((p) => correspond([p.libelle], recherche)),
@@ -29,26 +34,58 @@ export function PrestationsPage() {
   }
 
   useEffect(() => {
-    recharger().catch((e) => setErreur(String(e)));
+    recharger()
+      .catch((e) => setErreur(String(e)))
+      .finally(() => setChargement(false));
   }, []);
 
-  async function ajouter(e: React.FormEvent) {
+  function reinitialiser() {
+    setEdition(null);
+    setLibelle("");
+    setPrix("");
+  }
+
+  async function enregistrer(e: React.FormEvent) {
     e.preventDefault();
     setErreur(null);
-    const montant = parseMontant(prix);
-    if (montant === null || montant < 0) {
-      setErreur("Prix invalide");
+    if (!libelle.trim()) {
+      setErreur("Le libellé est requis.");
       return;
     }
+    const montant = parseMontant(prix);
+    if (montant === null || montant < 0) {
+      setErreur("Prix invalide (ex : 50 000 ou 50.000)");
+      return;
+    }
+    setEnvoi(true);
     try {
-      await createPrestation({ libelle, prix: montant });
-      setLibelle("");
-      setPrix("");
+      if (edition) {
+        // Les factures déjà émises ne bougent pas : leur libellé et leur prix
+        // y sont figés (snapshot). Seules les futures factures suivent.
+        await updatePrestation({
+          ...edition,
+          libelle: libelle.trim(),
+          prix: montant,
+        });
+        showToast("Prestation modifiée");
+      } else {
+        await createPrestation({ libelle: libelle.trim(), prix: montant });
+        showToast("Prestation ajoutée");
+      }
+      reinitialiser();
       await recharger();
-      showToast("Prestation ajoutée");
     } catch (err) {
       setErreur(String(err));
+    } finally {
+      setEnvoi(false);
     }
+  }
+
+  function modifier(p: Prestation) {
+    setErreur(null);
+    setEdition(p);
+    setLibelle(p.libelle);
+    setPrix(String(p.prix));
   }
 
   async function supprimer(p: Prestation) {
@@ -56,6 +93,7 @@ export function PrestationsPage() {
     setErreur(null);
     try {
       await deletePrestation(p.id);
+      if (edition?.id === p.id) reinitialiser();
       await recharger();
       showToast("Prestation supprimée");
     } catch (err) {
@@ -94,7 +132,16 @@ export function PrestationsPage() {
 
       {erreur && <p className="erreur">{erreur}</p>}
 
-      <form className="carte-form" onSubmit={ajouter}>
+      <form className="carte-form" onSubmit={enregistrer}>
+        <h3 className="form-titre">
+          {edition ? `Modifier « ${edition.libelle} »` : "Nouvelle prestation"}
+        </h3>
+        {edition && (
+          <p className="aide">
+            Le nouveau prix ne s'applique qu'aux prochaines factures : celles
+            déjà émises conservent le prix figé à leur création.
+          </p>
+        )}
         <div className="champs">
           <label>
             <span>Libellé</span>
@@ -116,9 +163,20 @@ export function PrestationsPage() {
             />
           </label>
         </div>
-        <button type="submit" className="btn-primary">
-          Ajouter la prestation
-        </button>
+        <div className="form-pied">
+          <button type="submit" className="btn-primary" disabled={envoi}>
+            {envoi
+              ? "Enregistrement…"
+              : edition
+                ? "Enregistrer les modifications"
+                : "Ajouter la prestation"}
+          </button>
+          {edition && (
+            <button type="button" onClick={reinitialiser}>
+              Annuler
+            </button>
+          )}
+        </div>
       </form>
 
       <BarreRecherche
@@ -147,6 +205,7 @@ export function PrestationsPage() {
                 </td>
                 <td className="col-montant">{formatMontant(p.prix)}</td>
                 <td className="cell-actions">
+                  <button onClick={() => modifier(p)}>Modifier</button>
                   <button onClick={() => basculerArchive(p)}>
                     {p.actif ? "Archiver" : "Réactiver"}
                   </button>
@@ -159,9 +218,11 @@ export function PrestationsPage() {
             {prestationsFiltrees.length === 0 && (
               <tr>
                 <td colSpan={3} className="vide">
-                  {prestations.length === 0
-                    ? "Aucune prestation pour le moment."
-                    : "Aucune prestation ne correspond à la recherche."}
+                  {chargement
+                    ? "Chargement…"
+                    : prestations.length === 0
+                      ? "Aucune prestation pour le moment."
+                      : "Aucune prestation ne correspond à la recherche."}
                 </td>
               </tr>
             )}

@@ -38,6 +38,47 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 - La dernière dépense saisie apparaît en tête de liste, et une confirmation est
   demandée avant suppression.
 
+### Ajouté (lot 2 : ergonomie et correction de saisie)
+
+- **Modification d'un client, d'une prestation et d'une facture.** Une erreur
+  de saisie ne se corrigeait pas : il fallait supprimer et recommencer. Une
+  facture reste modifiable tant qu'aucun paiement n'y est enregistré ; elle se
+  verrouille ensuite, parce qu'un reçu déjà remis atteste d'un montant. Le
+  nouveau prix d'une prestation ne s'applique qu'aux factures suivantes.
+- **Date d'émission choisissable** à la création d'une facture (reprise
+  d'historique) et **quantité saisissable** directement, au lieu d'un clic par
+  unité.
+- **Dépenses sans facture** : loyer, carburant et autres charges du cabinet
+  peuvent enfin être enregistrés. Elles comptent dans les dépenses du tableau
+  de bord, sans entrer dans la marge d'un client.
+- **Sauvegarde et restauration de la base** depuis les Paramètres. La
+  restauration prend effet au redémarrage et conserve la base précédente sous
+  « .avant-restauration ».
+- **Modes de paiement pré-remplis** (Espèces, Virement, Mobile Money, Chèque) :
+  la liste déroulante de l'encaissement était vide à l'installation.
+
+### Corrigé (lot 2)
+
+- **Le filtre de période du tableau de bord s'applique aux cartes chiffrées**,
+  et plus seulement aux graphiques — les deux moitiés de l'écran affichaient
+  des périodes différentes sans que rien ne l'indique.
+- **Impression** : le document n'est plus tronqué à la première page. La
+  fenêtre modale qui le contient limitait la hauteur imprimable.
+- **Message clair** au lieu de l'erreur SQLite à la suppression d'un client
+  ayant des factures.
+- **Confirmation** avant la suppression d'un client, d'une dépense ou d'un mode
+  de paiement.
+- **Logo** : re-sélectionner le même fichier après « Retirer » fonctionne.
+- **Colonne « Annulé »** dans l'export CSV des reçus, et « Charge du cabinet »
+  pour une dépense sans facture dans l'export des dépenses.
+- **Indicateur de chargement** sur toutes les listes, qui affichaient « aucune
+  donnée » pendant le chargement, et **boutons verrouillés** pendant
+  l'enregistrement (double soumission possible, y compris sur les paiements).
+- La date par défaut du formulaire de dépense suit le jour courant même si
+  l'application reste ouverte après minuit.
+- **Fenêtre agrandie** (1280×820, minimum 900×600) et mise en page adaptée aux
+  écrans étroits : les tableaux débordaient à la taille par défaut.
+
 ### Ajouté
 
 - **Remise sur facture**, globale, en francs ou en pourcentage. Elle est

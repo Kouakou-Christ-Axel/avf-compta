@@ -75,6 +75,9 @@ pub fn nb_utilisations(conn: &Connection, id: i64) -> AppResult<i64> {
 }
 
 pub fn update(conn: &Connection, p: &Prestation) -> AppResult<()> {
+    if p.libelle.trim().is_empty() {
+        return Err(AppError::Validation("le libellé est requis".into()));
+    }
     if p.prix < 0 {
         return Err(AppError::Validation("le prix ne peut être négatif".into()));
     }

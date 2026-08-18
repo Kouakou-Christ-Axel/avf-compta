@@ -31,8 +31,18 @@ export async function exporterClientsCsv(): Promise<boolean> {
 export async function exporterRecusCsv(): Promise<boolean> {
   const recus = await listRecus();
   const details = await Promise.all(recus.map((r) => getRecu(r.id)));
+  // La colonne « Annulé » manquait : un reçu annulé était indiscernable d'un
+  // reçu valide dans le fichier comptable, alors que l'écran, lui, le signale.
   const csv = toCsv(
-    ["Numéro", "Émis le", "Client", "Note", "Date paiement", "Montant"],
+    [
+      "Numéro",
+      "Émis le",
+      "Client",
+      "Note",
+      "Date paiement",
+      "Montant",
+      "Annulé",
+    ],
     details.map((d) => [
       d.numero,
       d.emis_le.slice(0, 10),
@@ -40,6 +50,7 @@ export async function exporterRecusCsv(): Promise<boolean> {
       d.note_reference ?? `#${d.note_id}`,
       d.date_paiement.slice(0, 10),
       String(d.montant),
+      d.annule ? "oui" : "non",
     ]),
   );
   return enregistrerCsv("recus.csv", csv);
@@ -83,7 +94,9 @@ export async function exporterDepensesCsv(): Promise<boolean> {
   const csv = toCsv(
     ["Note", "Libellé", "Montant", "Date"],
     depenses.map((d) => [
-      d.note_reference ?? `#${d.note_id}`,
+      d.note_id === null
+        ? "Charge du cabinet"
+        : (d.note_reference ?? `#${d.note_id}`),
       d.libelle,
       String(d.montant),
       d.date_depense,

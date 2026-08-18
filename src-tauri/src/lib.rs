@@ -13,8 +13,6 @@ mod services;
 use std::sync::Mutex;
 use tauri::Manager;
 
-const DB_FILE: &str = "avf_compta.sqlite";
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -32,7 +30,11 @@ pub fn run() {
 
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
-            let conn = db::open(dir.join(DB_FILE))?;
+            // Une sauvegarde déposée par « Restaurer » remplace la base ici,
+            // avant toute ouverture : le fichier ne peut pas être écrasé tant
+            // qu'une connexion le tient (impossible sous Windows).
+            db::sauvegarde::appliquer_restauration_en_attente(&dir)?;
+            let conn = db::open(dir.join(db::sauvegarde::DB_FILE))?;
             app.manage(Mutex::new(conn));
             Ok(())
         })
@@ -54,6 +56,7 @@ pub fn run() {
             commands::notes::list_notes_resume,
             commands::notes::get_note,
             commands::notes::create_note,
+            commands::notes::update_note,
             commands::notes::delete_note,
             commands::notes::annuler_note,
             commands::paiements::list_paiements,
@@ -78,6 +81,9 @@ pub fn run() {
             commands::modes_paiement::delete_mode_paiement,
             commands::fichiers::enregistrer_fichier,
             commands::fichiers::lire_fichier,
+            commands::sauvegarde::sauvegarder_base,
+            commands::sauvegarde::restaurer_base,
+            commands::sauvegarde::chemin_base,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

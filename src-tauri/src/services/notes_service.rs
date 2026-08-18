@@ -1,6 +1,6 @@
 use crate::error::{AppError, AppResult};
 use crate::models::NewNote;
-use crate::repositories::prestations;
+use crate::repositories::{notes, prestations};
 use rusqlite::Connection;
 
 /// Statut initial d'une note de frais.
@@ -27,6 +27,21 @@ fn valider_remise(remise_type: Option<&str>, valeur: i64) -> AppResult<()> {
             "type de remise inconnu: {autre}"
         ))),
     }
+}
+
+/// Une note doit porter au moins une ligne, chacune en quantité positive.
+fn valider_lignes(n: &NewNote) -> AppResult<()> {
+    if n.lignes.is_empty() {
+        return Err(AppError::Validation(
+            "une note doit comporter au moins une ligne".into(),
+        ));
+    }
+    if n.lignes.iter().any(|l| l.quantite <= 0) {
+        return Err(AppError::Validation(
+            "la quantité doit être strictement positive".into(),
+        ));
+    }
+    Ok(())
 }
 
 /// Extrait l'année (2 chiffres) et le mois d'une date « YYYY-MM-DD ».
@@ -63,18 +78,7 @@ fn generer_reference(conn: &Connection, date_emission: &str) -> AppResult<String
 /// générée automatiquement (`AA-MM-NNNN`). Si une prestation est introuvable,
 /// toute la transaction est annulée (aucune note orpheline).
 pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
-    if n.lignes.is_empty() {
-        return Err(AppError::Validation(
-            "une note doit comporter au moins une ligne".into(),
-        ));
-    }
-    for l in &n.lignes {
-        if l.quantite <= 0 {
-            return Err(AppError::Validation(
-                "la quantité doit être strictement positive".into(),
-            ));
-        }
-    }
+    valider_lignes(n)?;
     valider_remise(n.remise_type.as_deref(), n.remise_valeur)?;
     // Une remise sans type saisi n'est pas appliquée : on normalise à zéro pour
     // que la valeur stockée reflète toujours ce qui est réellement déduit.
@@ -104,19 +108,82 @@ pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
     )?;
     let note_id = tx.last_insert_rowid();
 
+    inserer_lignes(&tx, note_id, n)?;
+
+    tx.commit()?;
+    Ok(note_id)
+}
+
+/// Insère les lignes d'une note en figeant le libellé et le prix courants de
+/// chaque prestation (snapshot).
+fn inserer_lignes(conn: &Connection, note_id: i64, n: &NewNote) -> AppResult<()> {
     for l in &n.lignes {
-        // Snapshot du libellé et du prix au moment de l'ajout.
-        let p = prestations::get(&tx, l.prestation_id)?;
-        tx.execute(
+        let p = prestations::get(conn, l.prestation_id)?;
+        conn.execute(
             "INSERT INTO note_lignes
                 (note_id, prestation_id, libelle_snapshot, prix_snapshot, quantite)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![note_id, p.id, p.libelle, p.prix, l.quantite],
         )?;
     }
+    Ok(())
+}
 
+/// Modifie une note existante : client, date, échéance, remise et lignes.
+///
+/// **Refusé dès qu'un paiement y est rattaché** (ou si elle est annulée) :
+/// un reçu déjà remis au client atteste d'un montant, la facture ne doit plus
+/// pouvoir en changer. La référence n'est jamais régénérée — c'est un
+/// identifiant déjà communiqué, même si la date d'émission change de mois.
+///
+/// Les lignes sont remplacées en bloc, avec de nouveaux snapshots : modifier
+/// une facture reprend donc les prix **actuels** des prestations.
+pub fn update_note(conn: &mut Connection, id: i64, n: &NewNote) -> AppResult<()> {
+    valider_lignes(n)?;
+    valider_remise(n.remise_type.as_deref(), n.remise_valeur)?;
+    annee_mois(&n.date_emission)?;
+
+    let statut = notes::statut(conn, id)?;
+    if statut == "annulee" {
+        return Err(AppError::Validation(
+            "cette facture est annulée : elle ne peut plus être modifiée".into(),
+        ));
+    }
+    let payes = notes::nb_paiements_actifs(conn, id)?;
+    if payes > 0 {
+        return Err(AppError::Validation(format!(
+            "cette facture porte déjà {payes} paiement(s) : annulez-les avant de la modifier."
+        )));
+    }
+
+    let remise_valeur = if n.remise_type.is_some() {
+        n.remise_valeur
+    } else {
+        0
+    };
+
+    let tx = conn.transaction()?;
+    let modifiees = tx.execute(
+        "UPDATE notes_de_frais
+            SET client_id = ?1, date_emission = ?2, echeance = ?3,
+                remise_type = ?4, remise_valeur = ?5
+          WHERE id = ?6",
+        rusqlite::params![
+            n.client_id,
+            n.date_emission,
+            n.echeance,
+            n.remise_type,
+            remise_valeur,
+            id
+        ],
+    )?;
+    if modifiees == 0 {
+        return Err(AppError::NotFound(format!("note {id}")));
+    }
+    tx.execute("DELETE FROM note_lignes WHERE note_id = ?1", [id])?;
+    inserer_lignes(&tx, id, n)?;
     tx.commit()?;
-    Ok(note_id)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -260,7 +327,10 @@ mod tests {
             repo_clients::list_resume(&conn).unwrap()[0].total_facture,
             27_000
         );
-        assert_eq!(stats::resume(&conn).unwrap().total_facture, 27_000);
+        assert_eq!(
+            stats::resume(&conn, None, None).unwrap().total_facture,
+            27_000
+        );
         assert_eq!(stats::mensuelles(&conn).unwrap()[0].ca, 27_000);
     }
 
@@ -345,5 +415,99 @@ mod tests {
             create_note(&mut conn, &n),
             Err(AppError::Validation(_))
         ));
+    }
+
+    /// Modifier une facture remplace ses lignes et reprend les prix actuels.
+    #[test]
+    fn update_note_remplace_les_lignes() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        assert_eq!(notes::total(&conn, id).unwrap(), 10_000);
+
+        let mut modif = new_note(client, presta, 4);
+        modif.echeance = Some("2026-07-31".into());
+        update_note(&mut conn, id, &modif).unwrap();
+
+        assert_eq!(notes::total(&conn, id).unwrap(), 40_000);
+        assert_eq!(notes::lignes(&conn, id).unwrap().len(), 1);
+        assert_eq!(
+            notes::get(&conn, id).unwrap().echeance.as_deref(),
+            Some("2026-07-31")
+        );
+    }
+
+    /// La référence reste celle communiquée au client, même si la date change.
+    #[test]
+    fn update_note_conserve_la_reference() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        let reference = notes::get(&conn, id).unwrap().reference;
+
+        let mut modif = new_note(client, presta, 1);
+        modif.date_emission = "2026-09-02".into();
+        update_note(&mut conn, id, &modif).unwrap();
+
+        let apres = notes::get(&conn, id).unwrap();
+        assert_eq!(apres.reference, reference);
+        assert_eq!(apres.date_emission, "2026-09-02");
+    }
+
+    /// Une facture déjà encaissée est verrouillée : un reçu remis au client
+    /// atteste d'un montant qui ne doit plus bouger.
+    #[test]
+    fn update_note_refuse_si_paiement() {
+        use crate::models::NewPaiement;
+        use crate::services::paiements_service;
+
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        paiements_service::enregistrer(
+            &conn,
+            &NewPaiement {
+                note_id: id,
+                montant: 10_000,
+                date_paiement: "2026-06-18".into(),
+                methode: None,
+            },
+        )
+        .unwrap();
+
+        assert!(matches!(
+            update_note(&mut conn, id, &new_note(client, presta, 2)),
+            Err(AppError::Validation(_))
+        ));
+        assert_eq!(notes::total(&conn, id).unwrap(), 10_000);
+    }
+
+    #[test]
+    fn update_note_refuse_si_annulee() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        notes::annuler(&conn, id).unwrap();
+
+        assert!(matches!(
+            update_note(&mut conn, id, &new_note(client, presta, 2)),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    /// Une modification invalide ne doit pas laisser la facture amputée de ses
+    /// lignes (la suppression et la réinsertion sont dans une transaction).
+    #[test]
+    fn update_note_invalide_ne_casse_pas_la_facture() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+
+        let mut modif = new_note(client, presta, 1);
+        modif.lignes[0].prestation_id = 9_999; // prestation inexistante
+        assert!(update_note(&mut conn, id, &modif).is_err());
+
+        assert_eq!(notes::total(&conn, id).unwrap(), 10_000);
+        assert_eq!(notes::lignes(&conn, id).unwrap().len(), 1);
     }
 }

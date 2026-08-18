@@ -83,7 +83,8 @@ export interface NoteResume {
 
 export interface Depense {
   id: number;
-  note_id: number;
+  /** `null` pour une charge générale du cabinet, rattachée à aucune facture. */
+  note_id: number | null;
   libelle: string;
   montant: number;
   date_depense: string;
@@ -91,7 +92,7 @@ export interface Depense {
 }
 
 export interface NewDepense {
-  note_id: number;
+  note_id: number | null;
   libelle: string;
   montant: number;
   date_depense: string;
@@ -99,7 +100,7 @@ export interface NewDepense {
 
 export interface DepenseLigne {
   id: number;
-  note_id: number;
+  note_id: number | null;
   note_reference: string | null;
   libelle: string;
   montant: number;

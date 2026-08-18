@@ -30,6 +30,12 @@ pub fn create_note(state: State<'_, DbState>, note: NewNote) -> AppResult<i64> {
 }
 
 #[tauri::command]
+pub fn update_note(state: State<'_, DbState>, id: i64, note: NewNote) -> AppResult<()> {
+    let mut conn = db(&state);
+    notes_service::update_note(&mut conn, id, &note)
+}
+
+#[tauri::command]
 pub fn delete_note(state: State<'_, DbState>, id: i64) -> AppResult<()> {
     let conn = db(&state);
     notes::delete(&conn, id)

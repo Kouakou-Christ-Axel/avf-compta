@@ -9,6 +9,7 @@ import {
 import type { Parametres, ModePaiement } from "../api/types";
 import { useToast } from "../components/toast-context";
 import { MisesAJour } from "../components/MisesAJour";
+import { SauvegardeBase } from "../components/SauvegardeBase";
 
 const VIDE: Parametres = {
   cabinet_nom: null,
@@ -57,10 +58,11 @@ export function ParametresPage() {
     }
   }
 
-  async function supprimerMode(id: number) {
+  async function supprimerMode(m: ModePaiement) {
+    if (!confirm(`Supprimer le mode « ${m.libelle} » ?`)) return;
     setErreur(null);
     try {
-      await deleteModePaiement(id);
+      await deleteModePaiement(m.id);
       chargerModes();
       showToast("Mode supprimé");
     } catch (err) {
@@ -73,7 +75,12 @@ export function ParametresPage() {
   }
 
   function choisirLogo(e: React.ChangeEvent<HTMLInputElement>) {
-    const fichier = e.target.files?.[0];
+    const champ = e.target;
+    const fichier = champ.files?.[0];
+    // Sans cette remise à zéro, re-sélectionner le *même* fichier après un
+    // « Retirer » ne déclenche aucun onChange : le logo semblait impossible à
+    // remettre.
+    champ.value = "";
     if (!fichier) return;
     if (fichier.size > 500_000) {
       setErreur("Logo trop volumineux (max 500 Ko).");
@@ -81,6 +88,7 @@ export function ParametresPage() {
     }
     const reader = new FileReader();
     reader.onload = () => maj("logo", reader.result as string);
+    reader.onerror = () => setErreur("Impossible de lire ce fichier image.");
     reader.readAsDataURL(fichier);
   }
 
@@ -237,7 +245,7 @@ export function ParametresPage() {
                       <button
                         type="button"
                         className="btn-danger"
-                        onClick={() => supprimerMode(m.id)}
+                        onClick={() => supprimerMode(m)}
                       >
                         Supprimer
                       </button>
@@ -249,6 +257,8 @@ export function ParametresPage() {
           </table>
         </div>
       </div>
+
+      <SauvegardeBase />
 
       <MisesAJour />
     </section>

@@ -21,12 +21,18 @@ export function StatsPage() {
   const [au, setAu] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
 
+  // Les cartes chiffrées suivent désormais le filtre de période, comme les
+  // graphiques : les deux moitiés de l'écran montraient jusqu'ici des périodes
+  // différentes.
   useEffect(() => {
-    Promise.all([resumeStats(), statsMensuelles()])
-      .then(([resume, mois]) => {
-        setStats(resume);
-        setMensuelles(mois);
-      })
+    resumeStats(du || null, au || null)
+      .then(setStats)
+      .catch((e) => setErreur(String(e)));
+  }, [du, au]);
+
+  useEffect(() => {
+    statsMensuelles()
+      .then(setMensuelles)
       .catch((e) => setErreur(String(e)));
   }, []);
 
@@ -42,8 +48,19 @@ export function StatsPage() {
   if (erreur) return <p className="erreur">{erreur}</p>;
   if (!stats) return <p className="aide">Chargement…</p>;
 
+  const periode =
+    du || au
+      ? `du ${du || "début"} au ${au || "aujourd'hui"}`
+      : "depuis le début";
+
   const cartes = [
-    { label: "Clients", valeur: String(stats.nb_clients), ton: "neutre" },
+    // Le nombre de clients est un stock, pas un flux : il ne dépend pas de la
+    // période sélectionnée.
+    {
+      label: "Clients (total)",
+      valeur: String(stats.nb_clients),
+      ton: "neutre",
+    },
     { label: "Factures", valeur: String(stats.nb_notes), ton: "neutre" },
     {
       label: "Total facturé",
@@ -67,7 +84,7 @@ export function StatsPage() {
       <header className="page-tete">
         <div>
           <h2>Tableau de bord</h2>
-          <p className="page-sous">Vue d'ensemble du cabinet</p>
+          <p className="page-sous">Vue d'ensemble du cabinet — {periode}</p>
         </div>
       </header>
 
