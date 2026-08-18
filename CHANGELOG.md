@@ -38,6 +38,21 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 - La dernière dépense saisie apparaît en tête de liste, et une confirmation est
   demandée avant suppression.
 
+### Sécurité (lot 4)
+
+- **Les boîtes de dialogue « Enregistrer sous » et « Ouvrir » sont ouvertes
+  côté Rust.** Le chemin du fichier ne transite plus par le JavaScript : les
+  commandes génériques `enregistrer_fichier(chemin, octets)` et
+  `lire_fichier(chemin)` acceptaient n'importe quel chemin du disque. Elles
+  sont remplacées par des commandes dédiées (export CSV, import CSV,
+  sauvegarde, restauration).
+- **Content-Security-Policy** définie (elle était absente) : `default-src
+'self'`, élargi seulement à ce que l'application utilise réellement — `data:`
+  pour le logo du cabinet, styles en ligne pour les graphiques, et les sources
+  IPC nécessaires à la communication avec le backend.
+- Retrait de la permission `dialog:default` et de la dépendance JavaScript
+  correspondante, devenues inutiles.
+
 ### Corrigé (lot 3 : dette technique)
 
 - **Numérotation des factures et des reçus dérivée du dernier numéro attribué**

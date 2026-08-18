@@ -109,12 +109,14 @@ export const deleteModePaiement = (id: number) =>
   invoke<void>("delete_mode_paiement", { id });
 
 // --- Sauvegarde de la base ---
-/** Écrit une copie de la base au chemin choisi. */
-export const sauvegarderBase = (chemin: string) =>
-  invoke<void>("sauvegarder_base", { chemin });
-/** Prépare la restauration ; elle prend effet au redémarrage. */
-export const restaurerBase = (chemin: string) =>
-  invoke<void>("restaurer_base", { chemin });
+// Le chemin n'est pas un paramètre : la commande Rust ouvre elle-même la
+// boîte de dialogue (voir commands::sauvegarde) pour qu'un renderer
+// compromis ne puisse pas dicter où la base est lue ou écrite.
+/** Ouvre « Enregistrer sous » et écrit une copie de la base. `false` si annulé. */
+export const sauvegarderBase = () => invoke<boolean>("sauvegarder_base");
+/** Ouvre « Ouvrir » et prépare la restauration ; elle prend effet au
+ * redémarrage. `false` si annulé. */
+export const restaurerBase = () => invoke<boolean>("restaurer_base");
 export const cheminBase = () => invoke<string>("chemin_base");
 
 // --- Paramètres (profil du cabinet) ---

@@ -64,29 +64,20 @@ export function parseCsv(texte: string): string[][] {
   return lignes.filter((l) => l.some((c) => c.trim() !== ""));
 }
 
+// La boîte « Enregistrer sous »/« Ouvrir » s'ouvre côté Rust (voir
+// commands::fichiers) : un chemin choisi en JS traverserait la frontière
+// JS→Rust et un renderer compromis pourrait alors le falsifier pour écrire
+// ou lire n'importe quel fichier du disque.
+
 /** Enregistre un contenu CSV via la boîte « Enregistrer sous ». */
 export async function enregistrerCsv(
   nomFichier: string,
   contenu: string,
 ): Promise<boolean> {
-  const { save } = await import("@tauri-apps/plugin-dialog");
-  const chemin = await save({
-    defaultPath: nomFichier,
-    filters: [{ name: "CSV", extensions: ["csv"] }],
-  });
-  if (!chemin) return false;
-  const octets = Array.from(new TextEncoder().encode(contenu));
-  await invoke("enregistrer_fichier", { chemin, contenu: octets });
-  return true;
+  return invoke<boolean>("exporter_csv", { nomDefaut: nomFichier, contenu });
 }
 
 /** Ouvre un fichier CSV et renvoie son contenu texte (ou null si annulé). */
 export async function ouvrirCsv(): Promise<string | null> {
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const chemin = await open({
-    multiple: false,
-    filters: [{ name: "CSV", extensions: ["csv"] }],
-  });
-  if (!chemin || typeof chemin !== "string") return null;
-  return invoke<string>("lire_fichier", { chemin });
+  return invoke<string | null>("importer_csv");
 }
