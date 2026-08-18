@@ -1,4 +1,5 @@
 pub mod migrations;
+pub mod sauvegarde;
 
 use crate::error::AppResult;
 use rusqlite::Connection;

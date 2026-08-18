@@ -5,9 +5,13 @@ use crate::repositories::stats;
 use tauri::State;
 
 #[tauri::command]
-pub fn resume_stats(state: State<'_, DbState>) -> AppResult<ResumeStats> {
+pub fn resume_stats(
+    state: State<'_, DbState>,
+    du: Option<String>,
+    au: Option<String>,
+) -> AppResult<ResumeStats> {
     let conn = db(&state);
-    stats::resume(&conn)
+    stats::resume(&conn, du.as_deref(), au.as_deref())
 }
 
 #[tauri::command]

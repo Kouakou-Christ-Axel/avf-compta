@@ -7,6 +7,7 @@ pub mod paiements;
 pub mod parametres;
 pub mod prestations;
 pub mod recus;
+pub mod sauvegarde;
 pub mod stats;
 
 use rusqlite::Connection;

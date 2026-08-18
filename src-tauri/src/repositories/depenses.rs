@@ -22,10 +22,12 @@ pub fn create(conn: &Connection, d: &NewDepense) -> AppResult<i64> {
             "le montant de la dépense doit être positif".into(),
         ));
     }
-    if super::notes::statut(conn, d.note_id)? == "annulee" {
-        return Err(AppError::Validation(
-            "cette facture est annulée : aucune dépense ne peut y être ajoutée".into(),
-        ));
+    if let Some(note_id) = d.note_id {
+        if super::notes::statut(conn, note_id)? == "annulee" {
+            return Err(AppError::Validation(
+                "cette facture est annulée : aucune dépense ne peut y être ajoutée".into(),
+            ));
+        }
     }
     conn.execute(
         "INSERT INTO depenses (note_id, libelle, montant, date_depense, cree_le)
@@ -71,7 +73,7 @@ pub fn list_all(conn: &Connection) -> AppResult<Vec<DepenseLigne>> {
         "SELECT d.id, d.note_id, n.reference AS note_reference,
                 d.libelle, d.montant, d.date_depense
          FROM depenses d
-         JOIN notes_de_frais n ON n.id = d.note_id
+         LEFT JOIN notes_de_frais n ON n.id = d.note_id
          ORDER BY d.date_depense DESC, d.id DESC",
     )?;
     let rows = stmt.query_map([], |row| {
@@ -139,7 +141,7 @@ mod tests {
         create(
             &conn,
             &NewDepense {
-                note_id: note,
+                note_id: Some(note),
                 libelle: "Transport".into(),
                 montant: 15_000,
                 date_depense: "2026-06-18".into(),
@@ -149,7 +151,7 @@ mod tests {
         create(
             &conn,
             &NewDepense {
-                note_id: note,
+                note_id: Some(note),
                 libelle: "Fournitures".into(),
                 montant: 5_000,
                 date_depense: "2026-06-18".into(),
@@ -168,7 +170,7 @@ mod tests {
             create(
                 &conn,
                 &NewDepense {
-                    note_id: note,
+                    note_id: Some(note),
                     libelle: " ".into(),
                     montant: 1_000,
                     date_depense: "2026-06-18".into(),
@@ -180,7 +182,7 @@ mod tests {
             create(
                 &conn,
                 &NewDepense {
-                    note_id: note,
+                    note_id: Some(note),
                     libelle: "X".into(),
                     montant: 0,
                     date_depense: "2026-06-18".into(),
@@ -188,5 +190,51 @@ mod tests {
             ),
             Err(AppError::Validation(_))
         ));
+    }
+
+    /// Une charge générale du cabinet n'est rattachée à aucune facture.
+    #[test]
+    fn depense_sans_facture_est_acceptee() {
+        let conn = open_in_memory().unwrap();
+        let id = create(
+            &conn,
+            &NewDepense {
+                note_id: None,
+                libelle: "Loyer du cabinet".into(),
+                montant: 120_000,
+                date_depense: "2026-06-01".into(),
+            },
+        )
+        .unwrap();
+
+        let toutes = list_all(&conn).unwrap();
+        assert_eq!(toutes.len(), 1);
+        assert_eq!(toutes[0].id, id);
+        assert_eq!(toutes[0].note_id, None);
+        assert_eq!(toutes[0].note_reference, None);
+    }
+
+    /// Elle compte dans les dépenses du mois au même titre que les autres.
+    #[test]
+    fn depense_sans_facture_compte_dans_les_stats() {
+        use crate::repositories::stats;
+
+        let conn = open_in_memory().unwrap();
+        create(
+            &conn,
+            &NewDepense {
+                note_id: None,
+                libelle: "Carburant".into(),
+                montant: 25_000,
+                date_depense: "2026-06-04".into(),
+            },
+        )
+        .unwrap();
+
+        let mois = stats::mensuelles(&conn).unwrap();
+        assert_eq!(mois.len(), 1);
+        assert_eq!(mois[0].mois, "2026-06");
+        assert_eq!(mois[0].depenses, 25_000);
+        assert_eq!(mois[0].marge, -25_000);
     }
 }

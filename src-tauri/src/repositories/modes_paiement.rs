@@ -41,11 +41,13 @@ mod tests {
     #[test]
     fn create_list_delete() {
         let conn = open_in_memory().unwrap();
-        let id = create(&conn, "Espèces").unwrap();
-        create(&conn, "Virement").unwrap();
-        assert_eq!(list(&conn).unwrap().len(), 2);
+        // La base neuve est pré-remplie avec les modes usuels (migration v13).
+        let depart = list(&conn).unwrap().len();
+        let id = create(&conn, "Wave").unwrap();
+        create(&conn, "Orange Money").unwrap();
+        assert_eq!(list(&conn).unwrap().len(), depart + 2);
         delete(&conn, id).unwrap();
-        assert_eq!(list(&conn).unwrap().len(), 1);
+        assert_eq!(list(&conn).unwrap().len(), depart + 1);
         assert!(matches!(create(&conn, " "), Err(AppError::Validation(_))));
     }
 }

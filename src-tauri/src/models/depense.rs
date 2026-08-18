@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-/// Dépense rattachée à une note de frais (montant en francs CFA entiers).
+/// Dépense en francs CFA entiers. `note_id` est `None` pour une charge
+/// générale du cabinet (loyer, carburant…), qui n'entre donc dans la marge
+/// d'aucun client.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Depense {
     pub id: i64,
-    pub note_id: i64,
+    pub note_id: Option<i64>,
     pub libelle: String,
     pub montant: i64,
     pub date_depense: String,
@@ -13,7 +15,7 @@ pub struct Depense {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewDepense {
-    pub note_id: i64,
+    pub note_id: Option<i64>,
     pub libelle: String,
     pub montant: i64,
     pub date_depense: String,
@@ -23,7 +25,7 @@ pub struct NewDepense {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DepenseLigne {
     pub id: i64,
-    pub note_id: i64,
+    pub note_id: Option<i64>,
     pub note_reference: Option<String>,
     pub libelle: String,
     pub montant: i64,

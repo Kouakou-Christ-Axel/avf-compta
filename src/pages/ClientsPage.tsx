@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { createClient, deleteClient, listClientsResume } from "../api/client";
+import {
+  createClient,
+  deleteClient,
+  getClient,
+  listClientsResume,
+  updateClient,
+} from "../api/client";
 import {
   exporterClientsCsv,
   importerClientsCsv,
   telechargerModeleClients,
 } from "../api/exports";
-import type { ClientResume } from "../api/types";
+import type { Client, ClientResume } from "../api/types";
 import { formatMontant } from "../api/money";
 import { CopyText } from "../components/CopyText";
 import { BarreRecherche } from "../components/BarreRecherche";
@@ -20,6 +26,10 @@ export function ClientsPage() {
   const [telephone, setTelephone] = useState("");
   const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+  const [chargement, setChargement] = useState(true);
+  const [envoi, setEnvoi] = useState(false);
+  // Client en cours de modification (null = formulaire d'ajout).
+  const [edition, setEdition] = useState<Client | null>(null);
 
   const clientsFiltres = useMemo(
     () =>
@@ -34,33 +44,76 @@ export function ClientsPage() {
   }
 
   useEffect(() => {
-    recharger().catch((e) => setErreur(String(e)));
+    recharger()
+      .catch((e) => setErreur(String(e)))
+      .finally(() => setChargement(false));
   }, []);
 
-  async function ajouter(e: React.FormEvent) {
+  function reinitialiser() {
+    setEdition(null);
+    setNom("");
+    setEmail("");
+    setTelephone("");
+  }
+
+  async function enregistrer(e: React.FormEvent) {
     e.preventDefault();
     setErreur(null);
+    if (!nom.trim()) {
+      setErreur("Le nom du client est requis.");
+      return;
+    }
+    setEnvoi(true);
     try {
-      await createClient({
-        nom,
-        email: email || null,
-        telephone: telephone || null,
-        adresse: null,
-      });
-      setNom("");
-      setEmail("");
-      setTelephone("");
+      if (edition) {
+        // `adresse` n'est pas exposée par la liste : on repart de la fiche
+        // complète pour ne pas l'effacer au passage.
+        await updateClient({
+          ...edition,
+          nom: nom.trim(),
+          email: email || null,
+          telephone: telephone || null,
+        });
+        showToast("Client modifié");
+      } else {
+        await createClient({
+          nom: nom.trim(),
+          email: email || null,
+          telephone: telephone || null,
+          adresse: null,
+        });
+        showToast("Client ajouté");
+      }
+      reinitialiser();
       await recharger();
+    } catch (err) {
+      setErreur(String(err));
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  async function modifier(c: ClientResume) {
+    setErreur(null);
+    try {
+      const fiche = await getClient(c.id);
+      setEdition(fiche);
+      setNom(fiche.nom);
+      setEmail(fiche.email ?? "");
+      setTelephone(fiche.telephone ?? "");
     } catch (err) {
       setErreur(String(err));
     }
   }
 
-  async function supprimer(id: number) {
+  async function supprimer(c: ClientResume) {
+    if (!confirm(`Supprimer définitivement « ${c.nom} » ?`)) return;
     setErreur(null);
     try {
-      await deleteClient(id);
+      await deleteClient(c.id);
+      if (edition?.id === c.id) reinitialiser();
       await recharger();
+      showToast("Client supprimé");
     } catch (err) {
       setErreur(String(err));
     }
@@ -116,7 +169,10 @@ export function ClientsPage() {
 
       {erreur && <p className="erreur">{erreur}</p>}
 
-      <form className="carte-form" onSubmit={ajouter}>
+      <form className="carte-form" onSubmit={enregistrer}>
+        <h3 className="form-titre">
+          {edition ? `Modifier « ${edition.nom} »` : "Nouveau client"}
+        </h3>
         <div className="champs">
           <label>
             <span>Nom</span>
@@ -145,9 +201,20 @@ export function ClientsPage() {
             />
           </label>
         </div>
-        <button type="submit" className="btn-primary">
-          Ajouter le client
-        </button>
+        <div className="form-pied">
+          <button type="submit" className="btn-primary" disabled={envoi}>
+            {envoi
+              ? "Enregistrement…"
+              : edition
+                ? "Enregistrer les modifications"
+                : "Ajouter le client"}
+          </button>
+          {edition && (
+            <button type="button" onClick={reinitialiser}>
+              Annuler
+            </button>
+          )}
+        </div>
       </form>
 
       <BarreRecherche
@@ -183,10 +250,8 @@ export function ClientsPage() {
                 <td className="col-montant">{formatMontant(c.solde)}</td>
                 <td className="col-montant">{formatMontant(c.marge)}</td>
                 <td className="cell-actions">
-                  <button
-                    className="btn-danger"
-                    onClick={() => supprimer(c.id)}
-                  >
+                  <button onClick={() => modifier(c)}>Modifier</button>
+                  <button className="btn-danger" onClick={() => supprimer(c)}>
                     Supprimer
                   </button>
                 </td>
@@ -195,9 +260,11 @@ export function ClientsPage() {
             {clientsFiltres.length === 0 && (
               <tr>
                 <td colSpan={8} className="vide">
-                  {clients.length === 0
-                    ? "Aucun client pour le moment."
-                    : "Aucun client ne correspond à la recherche."}
+                  {chargement
+                    ? "Chargement…"
+                    : clients.length === 0
+                      ? "Aucun client pour le moment."
+                      : "Aucun client ne correspond à la recherche."}
                 </td>
               </tr>
             )}

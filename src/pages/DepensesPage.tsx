@@ -13,6 +13,17 @@ import { BarreRecherche } from "../components/BarreRecherche";
 import { useToast } from "../components/toast-context";
 import { correspond } from "../utils/recherche";
 
+/** Facture de rattachement d'une dépense, ou sa nature si elle n'en a pas. */
+function libelleRattachement(d: DepenseLigne): string {
+  if (d.note_id === null) return "Charge du cabinet";
+  return d.note_reference ?? `#${d.note_id}`;
+}
+
+/** Date du jour au format ISO, relue à chaque appel. */
+function aujourdhui(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function DepensesPage() {
   const { showToast } = useToast();
   const [depenses, setDepenses] = useState<DepenseLigne[]>([]);
@@ -21,15 +32,17 @@ export function DepensesPage() {
   const [noteId, setNoteId] = useState("");
   const [libelle, setLibelle] = useState("");
   const [montant, setMontant] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(aujourdhui);
   const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+  const [chargement, setChargement] = useState(true);
+  const [envoi, setEnvoi] = useState(false);
 
   const depensesFiltrees = useMemo(
     () =>
       depenses.filter((d) =>
         correspond(
-          [d.libelle, d.note_reference ?? `#${d.note_id}`, d.date_depense],
+          [d.libelle, libelleRattachement(d), d.date_depense],
           recherche,
         ),
       ),
@@ -47,7 +60,8 @@ export function DepensesPage() {
         setClients(c);
         setDepenses(d);
       })
-      .catch((e) => setErreur(String(e)));
+      .catch((e) => setErreur(String(e)))
+      .finally(() => setChargement(false));
   }, []);
 
   const nomClient = new Map(clients.map((c) => [c.id, c.nom]));
@@ -59,9 +73,11 @@ export function DepensesPage() {
   async function ajouter(e: React.FormEvent) {
     e.preventDefault();
     setErreur(null);
-    const id = Number(noteId);
-    if (!noteId || Number.isNaN(id)) {
-      setErreur("Sélectionnez une note");
+    // `noteId` vide = charge générale du cabinet (loyer, carburant…), qui
+    // n'entre dans la marge d'aucun client.
+    const id = noteId === "" ? null : Number(noteId);
+    if (id !== null && Number.isNaN(id)) {
+      setErreur("Facture invalide");
       return;
     }
     if (libelle.trim() === "") {
@@ -70,30 +86,42 @@ export function DepensesPage() {
     }
     const valeur = parseMontant(montant);
     if (valeur === null || valeur <= 0) {
-      setErreur("Montant invalide");
+      setErreur("Montant invalide (ex : 5 000 ou 5.000)");
       return;
     }
+    if (!date) {
+      setErreur("Date requise");
+      return;
+    }
+    setEnvoi(true);
     try {
       await createDepense({
         note_id: id,
-        libelle,
+        libelle: libelle.trim(),
         montant: valeur,
         date_depense: date,
       });
       setLibelle("");
       setMontant("");
+      // La date par défaut était figée au chargement de la page : rouverte
+      // le lendemain, elle datait les nouvelles dépenses de la veille.
+      setDate(aujourdhui());
       await recharger();
       showToast("Dépense ajoutée");
     } catch (err) {
       setErreur(String(err));
+    } finally {
+      setEnvoi(false);
     }
   }
 
-  async function supprimer(id: number) {
+  async function supprimer(d: DepenseLigne) {
+    if (!confirm(`Supprimer la dépense « ${d.libelle} » ?`)) return;
     setErreur(null);
     try {
-      await deleteDepense(id);
+      await deleteDepense(d.id);
       await recharger();
+      showToast("Dépense supprimée");
     } catch (err) {
       setErreur(String(err));
     }
@@ -131,13 +159,9 @@ export function DepensesPage() {
       <form className="carte-form" onSubmit={ajouter}>
         <div className="champs">
           <label>
-            <span>Facture</span>
-            <select
-              value={noteId}
-              onChange={(e) => setNoteId(e.target.value)}
-              required
-            >
-              <option value="">— Sélectionner —</option>
+            <span>Facture (facultatif)</span>
+            <select value={noteId} onChange={(e) => setNoteId(e.target.value)}>
+              <option value="">Charge générale du cabinet</option>
               {notes.map((n) => (
                 <option key={n.id} value={n.id}>
                   {libelleNote(n)}
@@ -174,8 +198,8 @@ export function DepensesPage() {
             />
           </label>
         </div>
-        <button type="submit" className="btn-primary">
-          Ajouter la dépense
+        <button type="submit" className="btn-primary" disabled={envoi}>
+          {envoi ? "Ajout…" : "Ajouter la dépense"}
         </button>
       </form>
 
@@ -199,17 +223,12 @@ export function DepensesPage() {
           <tbody>
             {depensesFiltrees.map((d) => (
               <tr key={d.id}>
-                <td className="cell-fort">
-                  {d.note_reference ?? `#${d.note_id}`}
-                </td>
+                <td className="cell-fort">{libelleRattachement(d)}</td>
                 <td>{d.libelle}</td>
                 <td className="col-montant">{formatMontant(d.montant)}</td>
                 <td>{d.date_depense}</td>
                 <td className="cell-actions">
-                  <button
-                    className="btn-danger"
-                    onClick={() => supprimer(d.id)}
-                  >
+                  <button className="btn-danger" onClick={() => supprimer(d)}>
                     Supprimer
                   </button>
                 </td>
@@ -218,9 +237,11 @@ export function DepensesPage() {
             {depensesFiltrees.length === 0 && (
               <tr>
                 <td colSpan={5} className="vide">
-                  {depenses.length === 0
-                    ? "Aucune dépense pour le moment."
-                    : "Aucune dépense ne correspond à la recherche."}
+                  {chargement
+                    ? "Chargement…"
+                    : depenses.length === 0
+                      ? "Aucune dépense pour le moment."
+                      : "Aucune dépense ne correspond à la recherche."}
                 </td>
               </tr>
             )}

@@ -192,6 +192,44 @@ pub fn migrations() -> Migrations<'static> {
              WHERE p2.note_id = p.note_id AND p2.annule = 0 AND p2.id <= p.id), 0);
         "#,
         ),
+        // v12 : une dépense peut désormais exister sans facture (loyer,
+        // carburant, charges du cabinet). SQLite ne sait pas assouplir une
+        // contrainte NOT NULL en place : on reconstruit la table. Rien ne
+        // référence `depenses`, la reconstruction est donc sans effet de bord.
+        M::up(
+            r#"
+        CREATE TABLE depenses_v12 (
+            id           INTEGER PRIMARY KEY,
+            note_id      INTEGER REFERENCES notes_de_frais(id) ON DELETE CASCADE,
+            libelle      TEXT NOT NULL,
+            montant      INTEGER NOT NULL,
+            date_depense TEXT NOT NULL,
+            cree_le      TEXT NOT NULL
+        );
+        INSERT INTO depenses_v12 (id, note_id, libelle, montant, date_depense, cree_le)
+            SELECT id, note_id, libelle, montant, date_depense, cree_le FROM depenses;
+        DROP TABLE depenses;
+        ALTER TABLE depenses_v12 RENAME TO depenses;
+        CREATE INDEX idx_depenses_note ON depenses(note_id);
+        "#,
+        ),
+        // v13 : modes de paiement usuels pré-remplis. Sans eux la liste
+        // déroulante de l'encaissement était vide à l'installation, et il
+        // fallait passer par les Paramètres avant de pouvoir encaisser.
+        // `WHERE NOT EXISTS` : on ne réintroduit rien si l'utilisateur a déjà
+        // fait le ménage dans sa propre liste.
+        M::up(
+            r#"
+        INSERT INTO modes_paiement (libelle)
+        SELECT libelle FROM (
+            SELECT 'Espèces' AS libelle
+            UNION ALL SELECT 'Virement'
+            UNION ALL SELECT 'Mobile Money'
+            UNION ALL SELECT 'Chèque'
+        )
+        WHERE NOT EXISTS (SELECT 1 FROM modes_paiement);
+        "#,
+        ),
     ])
 }
 
@@ -286,5 +324,78 @@ mod tests {
         assert_eq!(total, 10_000);
         // Au moment du reçu n°1, il restait 6 000 à payer.
         assert_eq!(solde, 6_000);
+    }
+
+    /// La reconstruction de `depenses` (v12) ne doit perdre aucune ligne.
+    #[test]
+    fn v12_conserve_les_depenses_existantes() {
+        let mut conn = rusqlite::Connection::open_in_memory().unwrap();
+        let m = migrations();
+        m.to_version(&mut conn, 11).unwrap();
+
+        conn.execute_batch(
+            r#"
+            INSERT INTO clients (id, nom, cree_le) VALUES (1, 'Acme', '2026-01-01');
+            INSERT INTO notes_de_frais (id, client_id, reference, date_emission, statut, cree_le)
+                VALUES (1, 1, '26-01-0001', '2026-01-01', 'emise', '2026-01-01');
+            INSERT INTO depenses (id, note_id, libelle, montant, date_depense, cree_le)
+                VALUES (1, 1, 'Déplacement', 15000, '2026-01-03', '2026-01-03');
+            "#,
+        )
+        .unwrap();
+
+        m.to_latest(&mut conn).unwrap();
+
+        let (note_id, libelle, montant): (Option<i64>, String, i64) = conn
+            .query_row(
+                "SELECT note_id, libelle, montant FROM depenses WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            (note_id, libelle.as_str(), montant),
+            (Some(1), "Déplacement", 15_000)
+        );
+
+        // Et la colonne accepte désormais l'absence de facture.
+        conn.execute(
+            "INSERT INTO depenses (note_id, libelle, montant, date_depense, cree_le)
+             VALUES (NULL, 'Loyer', 100000, '2026-01-05', '2026-01-05')",
+            [],
+        )
+        .unwrap();
+    }
+
+    /// Les modes de paiement usuels sont pré-remplis à l'installation, mais on
+    /// ne réintroduit rien dans une base où l'utilisateur a déjà sa liste.
+    #[test]
+    fn v13_seed_les_modes_de_paiement_sans_ecraser() {
+        let conn = crate::db::open_in_memory().unwrap();
+        let modes: Vec<String> = conn
+            .prepare("SELECT libelle FROM modes_paiement ORDER BY libelle")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(modes, ["Chèque", "Espèces", "Mobile Money", "Virement"]);
+
+        let mut existante = rusqlite::Connection::open_in_memory().unwrap();
+        let m = migrations();
+        m.to_version(&mut existante, 12).unwrap();
+        existante
+            .execute("INSERT INTO modes_paiement (libelle) VALUES ('Wave')", [])
+            .unwrap();
+        m.to_latest(&mut existante).unwrap();
+
+        let apres: Vec<String> = existante
+            .prepare("SELECT libelle FROM modes_paiement")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(apres, ["Wave"]);
     }
 }

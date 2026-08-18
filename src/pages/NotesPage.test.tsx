@@ -73,11 +73,11 @@ function paiement(extra: Partial<Paiement> = {}): Paiement {
 }
 
 /** Répond aux commandes chargées par la page et son modal de détail. */
-function mockPage(paiements: Paiement[]) {
+function mockPage(paiements: Paiement[], resume: NoteResume = note) {
   mockIPC((cmd) => {
     switch (cmd) {
       case "list_notes_resume":
-        return [note];
+        return [resume];
       case "list_clients":
       case "list_prestations_actives":
       case "list_modes_paiement":
@@ -146,5 +146,61 @@ describe("NotesPage — reçus", () => {
     expect(
       within(ligne as HTMLElement).getByRole("button", { name: "Annuler" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("NotesPage — modification", () => {
+  it("propose de modifier une facture sans paiement", async () => {
+    mockPage([], { ...note, paye: 0, solde: 27000 });
+    render(
+      <ToastProvider>
+        <NotesPage />
+      </ToastProvider>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Modifier" }),
+    ).toBeInTheDocument();
+  });
+
+  // Un reçu déjà remis atteste d'un montant : la facture est verrouillée.
+  it("masque la modification dès qu'un paiement est enregistré", async () => {
+    mockPage([], { ...note, paye: 10000, solde: 17000 });
+    render(
+      <ToastProvider>
+        <NotesPage />
+      </ToastProvider>,
+    );
+
+    await screen.findByText("Acme SARL");
+    expect(
+      screen.queryByRole("button", { name: "Modifier" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("charge la facture dans le formulaire et permet d'abandonner", async () => {
+    mockPage([], { ...note, paye: 0, solde: 27000 });
+    render(
+      <ToastProvider>
+        <NotesPage />
+      </ToastProvider>,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Modifier" }),
+    );
+
+    expect(await screen.findByText("Modifier la facture")).toBeInTheDocument();
+    // La date d'émission de la facture, désormais saisissable.
+    expect(screen.getByDisplayValue("2026-06-18")).toBeInTheDocument();
+
+    // « Annuler » existe aussi sur chaque ligne du tableau (annuler la
+    // facture) : on cible celui du formulaire.
+    const formulaire = screen
+      .getByRole("button", { name: "Enregistrer les modifications" })
+      .closest("form") as HTMLElement;
+    await userEvent.click(
+      within(formulaire).getByRole("button", { name: "Annuler" }),
+    );
+    expect(screen.getByText("Nouvelle facture")).toBeInTheDocument();
   });
 });

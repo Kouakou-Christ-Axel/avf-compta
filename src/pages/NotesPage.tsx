@@ -16,6 +16,7 @@ import {
   listPaiements,
   listPrestationsActives,
   soldeNote,
+  updateNote,
 } from "../api/client";
 import { formatMontant, parseMontant } from "../api/money";
 import { exporterNotesCsv } from "../api/exports";
@@ -123,10 +124,15 @@ export function NotesPage() {
 
   // Formulaire de création.
   const [clientId, setClientId] = useState("");
+  const [dateEmission, setDateEmission] = useState(aujourdhui());
   const [echeance, setEcheance] = useState("");
   const [lignes, setLignes] = useState<NewNoteLigne[]>([]);
   const [remiseType, setRemiseType] = useState<RemiseType | "">("");
   const [remiseValeur, setRemiseValeur] = useState("");
+  const [chargement, setChargement] = useState(true);
+  const [envoi, setEnvoi] = useState(false);
+  // Facture en cours de modification (null = formulaire de création).
+  const [editionId, setEditionId] = useState<number | null>(null);
 
   const rappelEnvoye = useRef(false);
 
@@ -154,7 +160,8 @@ export function NotesPage() {
           notifierRetards(nbRetard);
         }
       })
-      .catch((e) => setErreur(String(e)));
+      .catch((e) => setErreur(String(e)))
+      .finally(() => setChargement(false));
   }, []);
 
   function ajouterLigne(prestationId: number) {
@@ -175,11 +182,67 @@ export function NotesPage() {
     setLignes((ls) => ls.filter((l) => l.prestation_id !== prestationId));
   }
 
+  /** Saisie directe de la quantité (auparavant : un clic par unité). */
+  function changerQuantite(prestationId: number, valeur: string) {
+    const q = valeur === "" ? 0 : Number(valeur);
+    if (!Number.isInteger(q) || q < 0) return;
+    setLignes((ls) =>
+      ls.map((l) =>
+        l.prestation_id === prestationId ? { ...l, quantite: q } : l,
+      ),
+    );
+  }
+
+  function reinitialiserFormulaire() {
+    setEditionId(null);
+    setClientId("");
+    setDateEmission(aujourdhui());
+    setEcheance("");
+    setLignes([]);
+    setRemiseType("");
+    setRemiseValeur("");
+  }
+
+  /** Charge une facture dans le formulaire pour la modifier. */
+  async function modifierFacture(n: NoteResume) {
+    setErreur(null);
+    try {
+      const d = await getNote(n.id);
+      setEditionId(n.id);
+      setClientId(String(d.note.client_id));
+      setDateEmission(d.note.date_emission);
+      setEcheance(d.note.echeance ?? "");
+      setRemiseType(d.note.remise_type ?? "");
+      setRemiseValeur(d.note.remise_type ? String(d.note.remise_valeur) : "");
+      setLignes(
+        d.lignes.map((l) => ({
+          prestation_id: l.prestation_id,
+          quantite: l.quantite,
+        })),
+      );
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
   async function creer(e: React.FormEvent) {
     e.preventDefault();
     setErreur(null);
     if (!clientId || lignes.length === 0) {
       setErreur("Sélectionnez un client et au moins une prestation.");
+      return;
+    }
+    if (lignes.some((l) => l.quantite <= 0)) {
+      setErreur("Chaque prestation doit avoir une quantité d'au moins 1.");
+      return;
+    }
+    if (!dateEmission) {
+      setErreur("Date d'émission requise");
+      return;
+    }
+    if (echeance && echeance < dateEmission) {
+      setErreur("L'échéance ne peut pas précéder la date d'émission.");
       return;
     }
     let valeurRemise = 0;
@@ -195,24 +258,29 @@ export function NotesPage() {
       }
       valeurRemise = v;
     }
+    const saisie = {
+      client_id: Number(clientId),
+      date_emission: dateEmission,
+      echeance: echeance || null,
+      lignes,
+      remise_type: remiseType || null,
+      remise_valeur: valeurRemise,
+    };
+    setEnvoi(true);
     try {
-      await createNote({
-        client_id: Number(clientId),
-        date_emission: aujourdhui(),
-        echeance: echeance || null,
-        lignes,
-        remise_type: remiseType || null,
-        remise_valeur: valeurRemise,
-      });
-      setClientId("");
-      setEcheance("");
-      setLignes([]);
-      setRemiseType("");
-      setRemiseValeur("");
+      if (editionId !== null) {
+        await updateNote(editionId, saisie);
+        showToast("Facture modifiée");
+      } else {
+        await createNote(saisie);
+        showToast("Facture créée");
+      }
+      reinitialiserFormulaire();
       await rechargerNotes();
-      showToast("Facture créée");
     } catch (err) {
       setErreur(String(err));
+    } finally {
+      setEnvoi(false);
     }
   }
 
@@ -314,7 +382,15 @@ export function NotesPage() {
       {erreur && <p className="erreur">{erreur}</p>}
 
       <form className="carte-form" onSubmit={creer}>
-        <h3 className="form-titre">Nouvelle facture</h3>
+        <h3 className="form-titre">
+          {editionId !== null ? "Modifier la facture" : "Nouvelle facture"}
+        </h3>
+        {editionId !== null && (
+          <p className="aide">
+            Les prestations reprennent leur prix actuel ; la référence reste
+            inchangée.
+          </p>
+        )}
         <div className="champs">
           <label>
             <span>Client</span>
@@ -331,10 +407,20 @@ export function NotesPage() {
             </select>
           </label>
           <label>
+            <span>Date d'émission</span>
+            <input
+              type="date"
+              value={dateEmission}
+              onChange={(e) => setDateEmission(e.target.value)}
+              required
+            />
+          </label>
+          <label>
             <span>Échéance (facultatif)</span>
             <input
               type="date"
               value={echeance}
+              min={dateEmission || undefined}
               onChange={(e) => setEcheance(e.target.value)}
             />
           </label>
@@ -394,8 +480,21 @@ export function NotesPage() {
               const p = prestations.find((pr) => pr.id === l.prestation_id);
               return (
                 <li key={l.prestation_id}>
-                  <span>
-                    {p?.libelle} × {l.quantite}
+                  <span className="ligne-gauche">
+                    {p?.libelle}
+                    <span className="ligne-qte">
+                      ×
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        aria-label={`Quantité pour ${p?.libelle ?? "la prestation"}`}
+                        value={l.quantite === 0 ? "" : l.quantite}
+                        onChange={(e) =>
+                          changerQuantite(l.prestation_id, e.target.value)
+                        }
+                      />
+                    </span>
                   </span>
                   <span className="ligne-droite">
                     {formatMontant((p?.prix ?? 0) * l.quantite)}
@@ -424,9 +523,18 @@ export function NotesPage() {
             )}
             Total : <strong>{formatMontant(totalApercu)}</strong>
           </span>
-          <button type="submit" className="btn-primary">
-            Créer la facture
+          <button type="submit" className="btn-primary" disabled={envoi}>
+            {envoi
+              ? "Enregistrement…"
+              : editionId !== null
+                ? "Enregistrer les modifications"
+                : "Créer la facture"}
           </button>
+          {editionId !== null && (
+            <button type="button" onClick={reinitialiserFormulaire}>
+              Annuler
+            </button>
+          )}
         </div>
       </form>
 
@@ -469,6 +577,11 @@ export function NotesPage() {
                 <td className="col-montant">{formatMontant(n.solde)}</td>
                 <td className="cell-actions">
                   <button onClick={() => setSelection(n.id)}>Détail</button>
+                  {/* Une facture encaissée est verrouillée : un reçu déjà
+                      remis atteste d'un montant qui ne doit plus changer. */}
+                  {n.statut !== "annulee" && n.paye === 0 && (
+                    <button onClick={() => modifierFacture(n)}>Modifier</button>
+                  )}
                   <button onClick={() => imprimerNoteListe(n)}>Imprimer</button>
                   {n.statut !== "annulee" && (
                     <button
@@ -484,9 +597,11 @@ export function NotesPage() {
             {notesFiltrees.length === 0 && (
               <tr>
                 <td colSpan={9} className="vide">
-                  {notes.length === 0
-                    ? "Aucune facture pour le moment."
-                    : "Aucune facture ne correspond à la recherche."}
+                  {chargement
+                    ? "Chargement…"
+                    : notes.length === 0
+                      ? "Aucune facture pour le moment."
+                      : "Aucune facture ne correspond à la recherche."}
                 </td>
               </tr>
             )}

@@ -907,13 +907,37 @@ button:hover {
   .recu-print * {
     visibility: visible;
   }
+
+  /* Le document imprimé vit dans une fenêtre modale : sans neutraliser le
+     positionnement fixe, la hauteur maximale et le défilement de celle-ci, le
+     navigateur n'imprime que ce qui tenait à l'écran — une facture longue
+     était coupée à la première page. */
+  .modal-overlay {
+    position: static;
+    display: block;
+    padding: 0;
+    background: none;
+  }
+  .modal {
+    max-height: none;
+    overflow: visible;
+    width: auto;
+    padding: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
   .recu-print {
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: static;
+    overflow: visible;
     width: 100%;
     border: none;
     border-radius: 0;
+    padding: 0;
+  }
+  /* Éviter qu'une ligne de prestation soit scindée entre deux pages. */
+  .recu-ligne,
+  .recu-montant {
+    break-inside: avoid;
   }
   .no-print {
     display: none !important;
@@ -1019,4 +1043,51 @@ button:hover {
   background: var(--panel);
   color: var(--muted);
   border: 1px solid var(--border);
+}
+
+/* ---------- Quantité éditable (lignes de facture) ---------- */
+
+.ligne-gauche {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ligne-qte {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--muted);
+}
+
+.ligne-qte input {
+  width: 4.5rem;
+  padding: 0.2rem 0.4rem;
+}
+
+/* ---------- Sauvegarde ---------- */
+
+.chemin-base {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+/* ---------- Écrans étroits ---------- */
+
+@media (max-width: 900px) {
+  .champs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-tete {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
+  .cartes {
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  }
 }

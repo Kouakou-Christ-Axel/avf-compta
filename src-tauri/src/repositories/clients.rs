@@ -79,6 +79,9 @@ pub fn list_resume(conn: &Connection) -> AppResult<Vec<ClientResume>> {
 }
 
 pub fn update(conn: &Connection, c: &Client) -> AppResult<()> {
+    if c.nom.trim().is_empty() {
+        return Err(AppError::Validation("le nom du client est requis".into()));
+    }
     let n = conn.execute(
         "UPDATE clients SET nom=?1, email=?2, telephone=?3, adresse=?4 WHERE id=?5",
         rusqlite::params![c.nom, c.email, c.telephone, c.adresse, c.id],
@@ -90,6 +93,17 @@ pub fn update(conn: &Connection, c: &Client) -> AppResult<()> {
 }
 
 pub fn delete(conn: &Connection, id: i64) -> AppResult<()> {
+    let factures: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM notes_de_frais WHERE client_id = ?1",
+        [id],
+        |r| r.get(0),
+    )?;
+    if factures > 0 {
+        return Err(AppError::Validation(format!(
+            "ce client a {factures} facture(s) : sa suppression effacerait leur historique. \
+             Annulez ou conservez ses factures."
+        )));
+    }
     let n = conn.execute("DELETE FROM clients WHERE id = ?1", [id])?;
     if n == 0 {
         return Err(AppError::NotFound(format!("client {id}")));
