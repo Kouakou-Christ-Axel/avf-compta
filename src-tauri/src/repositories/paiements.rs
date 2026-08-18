@@ -11,8 +11,15 @@ fn map_row(row: &Row) -> rusqlite::Result<Paiement> {
         methode: row.get("methode")?,
         annule: row.get::<_, i64>("annule")? != 0,
         cree_le: row.get("cree_le")?,
+        recu_id: row.get("recu_id")?,
+        recu_numero: row.get("recu_numero")?,
     })
 }
+
+/// Colonnes du paiement enrichies du reçu éventuellement déjà émis, pour que
+/// l'interface propose « Voir le reçu » plutôt que d'en générer un second.
+const SELECT_PAIEMENT: &str = "SELECT p.*, r.id AS recu_id, r.numero AS recu_numero
+     FROM paiements p LEFT JOIN recus r ON r.paiement_id = p.id";
 
 pub fn insert(
     conn: &Connection,
@@ -30,12 +37,13 @@ pub fn insert(
 }
 
 pub fn get(conn: &Connection, id: i64) -> AppResult<Paiement> {
-    Ok(conn.query_row("SELECT * FROM paiements WHERE id = ?1", [id], map_row)?)
+    Ok(conn.query_row(&format!("{SELECT_PAIEMENT} WHERE p.id = ?1"), [id], map_row)?)
 }
 
 pub fn list_by_note(conn: &Connection, note_id: i64) -> AppResult<Vec<Paiement>> {
-    let mut stmt =
-        conn.prepare("SELECT * FROM paiements WHERE note_id = ?1 ORDER BY date_paiement, id")?;
+    let mut stmt = conn.prepare(&format!(
+        "{SELECT_PAIEMENT} WHERE p.note_id = ?1 ORDER BY p.date_paiement, p.id"
+    ))?;
     let rows = stmt.query_map([note_id], map_row)?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }

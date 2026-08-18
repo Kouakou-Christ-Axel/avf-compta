@@ -41,6 +41,39 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Prestation>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+/// Prestations encore proposées à la facturation (les archivées sont exclues).
+/// Les factures déjà émises ne bougent pas : leur libellé et leur prix y sont
+/// figés (`note_lignes.libelle_snapshot` / `prix_snapshot`).
+pub fn list_actives(conn: &Connection) -> AppResult<Vec<Prestation>> {
+    let mut stmt =
+        conn.prepare("SELECT * FROM prestations WHERE actif = 1 ORDER BY libelle COLLATE NOCASE")?;
+    let rows = stmt.query_map([], map_row)?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// Archive (`actif = false`) ou réactive une prestation. Alternative sûre à la
+/// suppression, qui échoue dès que la prestation a déjà été facturée.
+pub fn set_actif(conn: &Connection, id: i64, actif: bool) -> AppResult<()> {
+    let n = conn.execute(
+        "UPDATE prestations SET actif = ?1 WHERE id = ?2",
+        rusqlite::params![actif as i64, id],
+    )?;
+    if n == 0 {
+        return Err(AppError::NotFound(format!("prestation {id}")));
+    }
+    Ok(())
+}
+
+/// Nombre de fois où la prestation apparaît sur une facture : au-delà de zéro
+/// la suppression est impossible (clé étrangère) et il faut archiver.
+pub fn nb_utilisations(conn: &Connection, id: i64) -> AppResult<i64> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*) FROM note_lignes WHERE prestation_id = ?1",
+        [id],
+        |r| r.get(0),
+    )?)
+}
+
 pub fn update(conn: &Connection, p: &Prestation) -> AppResult<()> {
     if p.prix < 0 {
         return Err(AppError::Validation("le prix ne peut être négatif".into()));
@@ -56,6 +89,13 @@ pub fn update(conn: &Connection, p: &Prestation) -> AppResult<()> {
 }
 
 pub fn delete(conn: &Connection, id: i64) -> AppResult<()> {
+    let utilisations = nb_utilisations(conn, id)?;
+    if utilisations > 0 {
+        return Err(AppError::Validation(format!(
+            "cette prestation figure sur {utilisations} ligne(s) de facture et ne peut pas \
+             être supprimée. Archivez-la pour qu'elle disparaisse des nouvelles factures."
+        )));
+    }
     let n = conn.execute("DELETE FROM prestations WHERE id = ?1", [id])?;
     if n == 0 {
         return Err(AppError::NotFound(format!("prestation {id}")));
@@ -107,5 +147,79 @@ mod tests {
         assert!(!p.actif);
         delete(&conn, id).unwrap();
         assert!(matches!(get(&conn, id), Err(AppError::NotFound(_))));
+    }
+
+    /// Une prestation archivée disparaît des nouvelles factures mais reste
+    /// visible dans la gestion des prestations.
+    #[test]
+    fn archiver_retire_de_la_liste_active() {
+        let conn = open_in_memory().unwrap();
+        let id = create(
+            &conn,
+            &NewPrestation {
+                libelle: "Bilan".into(),
+                prix: 50_000,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(list_actives(&conn).unwrap().len(), 1);
+        set_actif(&conn, id, false).unwrap();
+        assert!(list_actives(&conn).unwrap().is_empty());
+        assert_eq!(list(&conn).unwrap().len(), 1);
+        assert!(!get(&conn, id).unwrap().actif);
+
+        set_actif(&conn, id, true).unwrap();
+        assert_eq!(list_actives(&conn).unwrap().len(), 1);
+    }
+
+    /// Supprimer une prestation déjà facturée renvoie un message clair au lieu
+    /// de l'erreur SQLite « FOREIGN KEY constraint failed ».
+    #[test]
+    fn suppression_refusee_si_deja_facturee() {
+        use crate::models::note::NewNoteLigne;
+        use crate::models::{NewClient, NewNote};
+        use crate::repositories::clients;
+        use crate::services::notes_service;
+
+        let mut conn = open_in_memory().unwrap();
+        let client = clients::create(
+            &conn,
+            &NewClient {
+                nom: "Acme".into(),
+                email: None,
+                telephone: None,
+                adresse: None,
+            },
+        )
+        .unwrap();
+        let presta = create(
+            &conn,
+            &NewPrestation {
+                libelle: "Bilan".into(),
+                prix: 50_000,
+            },
+        )
+        .unwrap();
+        notes_service::create_note(
+            &mut conn,
+            &NewNote {
+                client_id: client,
+                date_emission: "2026-06-18".into(),
+                echeance: None,
+                lignes: vec![NewNoteLigne {
+                    prestation_id: presta,
+                    quantite: 1,
+                }],
+                remise_type: None,
+                remise_valeur: 0,
+            },
+        )
+        .unwrap();
+
+        match delete(&conn, presta).unwrap_err() {
+            AppError::Validation(msg) => assert!(msg.contains("Archivez")),
+            other => panic!("expected Validation error, got {other:?}"),
+        }
     }
 }

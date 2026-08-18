@@ -12,8 +12,8 @@ pub fn resume(conn: &Connection) -> AppResult<ResumeStats> {
         |r| r.get(0),
     )?;
     let total_facture: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(l.prix_snapshot * l.quantite), 0)
-         FROM note_lignes l JOIN notes_de_frais n ON n.id = l.note_id
+        "SELECT COALESCE(SUM(t.net), 0)
+         FROM note_totaux t JOIN notes_de_frais n ON n.id = t.note_id
          WHERE n.statut != 'annulee'",
         [],
         |r| r.get(0),
@@ -29,8 +29,7 @@ pub fn resume(conn: &Connection) -> AppResult<ResumeStats> {
     let total_impaye: i64 = conn.query_row(
         "SELECT COALESCE(SUM(CASE WHEN diff > 0 THEN diff ELSE 0 END), 0) FROM (
             SELECT
-              (SELECT COALESCE(SUM(prix_snapshot * quantite), 0)
-                 FROM note_lignes l WHERE l.note_id = n.id)
+              COALESCE((SELECT t.net FROM note_totaux t WHERE t.note_id = n.id), 0)
               -
               (SELECT COALESCE(SUM(montant), 0)
                  FROM paiements p WHERE p.note_id = n.id AND p.annule = 0) AS diff
@@ -57,8 +56,8 @@ pub fn mensuelles(conn: &Connection) -> AppResult<Vec<StatMois>> {
 
     let mut stmt = conn.prepare(
         "SELECT substr(n.date_emission, 1, 7) AS mois,
-                COALESCE(SUM(l.prix_snapshot * l.quantite), 0) AS ca
-         FROM notes_de_frais n JOIN note_lignes l ON l.note_id = n.id
+                COALESCE(SUM(t.net), 0) AS ca
+         FROM notes_de_frais n JOIN note_totaux t ON t.note_id = n.id
          WHERE n.statut != 'annulee'
          GROUP BY mois",
     )?;

@@ -9,6 +9,8 @@ fn map_row(row: &Row) -> rusqlite::Result<Recu> {
         numero: row.get("numero")?,
         emis_le: row.get("emis_le")?,
         annule: row.get::<_, i64>("annule")? != 0,
+        note_total: row.get("note_total")?,
+        note_solde: row.get("note_solde")?,
     })
 }
 
@@ -16,7 +18,7 @@ fn map_row(row: &Row) -> rusqlite::Result<Recu> {
 pub fn detail(conn: &Connection, id: i64) -> AppResult<RecuDetail> {
     let mut recu = conn
         .query_row(
-            "SELECT r.id, r.numero, r.emis_le, r.annule,
+            "SELECT r.id, r.numero, r.emis_le, r.annule, r.note_total, r.note_solde,
                 p.montant, p.date_paiement, p.methode,
                 n.id AS note_id, n.reference AS note_reference,
                 c.nom AS client_nom, c.email AS client_email,
@@ -42,8 +44,8 @@ pub fn detail(conn: &Connection, id: i64) -> AppResult<RecuDetail> {
                     client_email: row.get("client_email")?,
                     client_telephone: row.get("client_telephone")?,
                     lignes: Vec::new(),
-                    note_total: 0,
-                    note_solde: 0,
+                    note_total: row.get("note_total")?,
+                    note_solde: row.get("note_solde")?,
                 })
             },
         )
@@ -51,19 +53,51 @@ pub fn detail(conn: &Connection, id: i64) -> AppResult<RecuDetail> {
             rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("reçu {id}")),
             other => other.into(),
         })?;
+    // `note_total` et `note_solde` sont figés à l'émission (migration v11) : un
+    // reçu réimprimé montre la situation du jour de l'encaissement, pas celle
+    // d'aujourd'hui.
     recu.lignes = super::notes::lignes(conn, recu.note_id)?;
-    recu.note_total = super::notes::total(conn, recu.note_id)?;
-    let paye = super::paiements::total_paye(conn, recu.note_id)?;
-    recu.note_solde = recu.note_total - paye;
     Ok(recu)
 }
 
-pub fn insert(conn: &Connection, paiement_id: i64, numero: &str) -> AppResult<i64> {
+pub fn insert(
+    conn: &Connection,
+    paiement_id: i64,
+    numero: &str,
+    note_total: i64,
+    note_solde: i64,
+) -> AppResult<i64> {
     conn.execute(
-        "INSERT INTO recus (paiement_id, numero, emis_le) VALUES (?1, ?2, ?3)",
-        rusqlite::params![paiement_id, numero, super::now()],
+        "INSERT INTO recus (paiement_id, numero, emis_le, note_total, note_solde)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![paiement_id, numero, super::now(), note_total, note_solde],
     )?;
     Ok(conn.last_insert_rowid())
+}
+
+/// Reçu déjà émis pour ce paiement, s'il existe (au plus un : index unique
+/// `idx_recus_paiement`).
+pub fn find_by_paiement(conn: &Connection, paiement_id: i64) -> AppResult<Option<Recu>> {
+    match conn.query_row(
+        "SELECT * FROM recus WHERE paiement_id = ?1",
+        [paiement_id],
+        map_row,
+    ) {
+        Ok(r) => Ok(Some(r)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Prochain numéro de reçu, dérivé du **plus grand numéro déjà émis** et non
+/// d'un `COUNT(*)` : supprimer un reçu ne fait plus réattribuer son numéro.
+pub fn prochain_numero(conn: &Connection) -> AppResult<String> {
+    let max: Option<String> = conn.query_row("SELECT MAX(numero) FROM recus", [], |r| r.get(0))?;
+    let suivant = max
+        .and_then(|n| n.rsplit('-').next().and_then(|d| d.parse::<i64>().ok()))
+        .unwrap_or(0)
+        + 1;
+    Ok(format!("RECU-{suivant:04}"))
 }
 
 pub fn get(conn: &Connection, id: i64) -> AppResult<Recu> {
@@ -74,11 +108,6 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Recu>> {
     let mut stmt = conn.prepare("SELECT * FROM recus ORDER BY id DESC")?;
     let rows = stmt.query_map([], map_row)?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
-}
-
-/// Nombre de reçus déjà émis (sert à la numérotation séquentielle).
-pub fn count(conn: &Connection) -> AppResult<i64> {
-    Ok(conn.query_row("SELECT COUNT(*) FROM recus", [], |r| r.get(0))?)
 }
 
 /// Récapitulatif des reçus (avec client, montant, état annulé) pour la liste.
@@ -104,8 +133,10 @@ pub fn list_resume(conn: &Connection) -> AppResult<Vec<RecuResume>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-/// Annule un reçu : annule le paiement lié et rouvre la note si besoin.
-pub fn annuler(conn: &Connection, recu_id: i64) -> AppResult<()> {
+/// Marque un reçu comme annulé et renvoie l'identifiant du paiement lié.
+/// L'annulation complète (paiement + statut de la note) est orchestrée par
+/// `services::recus_service::annuler`, qui l'exécute dans une transaction.
+pub fn marquer_annule(conn: &Connection, recu_id: i64) -> AppResult<i64> {
     let paiement_id: i64 = conn
         .query_row(
             "SELECT paiement_id FROM recus WHERE id = ?1",
@@ -117,17 +148,7 @@ pub fn annuler(conn: &Connection, recu_id: i64) -> AppResult<()> {
             other => other.into(),
         })?;
     conn.execute("UPDATE recus SET annule = 1 WHERE id = ?1", [recu_id])?;
-    let note_id = super::paiements::annuler(conn, paiement_id)?;
-    // La note n'est plus soldée : on la remet à « emise » (sauf si annulée).
-    let statut: String = conn.query_row(
-        "SELECT statut FROM notes_de_frais WHERE id = ?1",
-        [note_id],
-        |r| r.get(0),
-    )?;
-    if statut != "annulee" {
-        super::notes::set_statut(conn, note_id, "emise")?;
-    }
-    Ok(())
+    Ok(paiement_id)
 }
 
 #[cfg(test)]
@@ -170,6 +191,8 @@ mod tests {
                     prestation_id: presta,
                     quantite: 1,
                 }],
+                remise_type: None,
+                remise_valeur: 0,
             },
         )
         .unwrap();
@@ -229,6 +252,8 @@ mod tests {
                     prestation_id: presta,
                     quantite: 1,
                 }],
+                remise_type: None,
+                remise_valeur: 0,
             },
         )
         .unwrap();
@@ -244,7 +269,7 @@ mod tests {
         .unwrap();
         let recu = recus_service::generer(&conn, paiement).unwrap();
 
-        annuler(&conn, recu.id).unwrap();
+        crate::services::recus_service::annuler(&mut conn, recu.id).unwrap();
 
         let d = detail(&conn, recu.id).unwrap();
         assert!(d.annule);

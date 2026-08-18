@@ -5,8 +5,10 @@ use rusqlite::Connection;
 
 pub const STATUT_PAYEE: &str = "payee";
 pub const STATUT_EMISE: &str = "emise";
+pub const STATUT_ANNULEE: &str = "annulee";
 
-/// Calcule le solde d'une note : total facturé, encaissé et reste dû.
+/// Calcule le solde d'une note : total facturé (remise déduite), encaissé et
+/// reste dû.
 pub fn solde(conn: &Connection, note_id: i64) -> AppResult<SoldeNote> {
     // Garantit que la note existe (sinon NotFound).
     notes::get(conn, note_id)?;
@@ -22,12 +24,36 @@ pub fn solde(conn: &Connection, note_id: i64) -> AppResult<SoldeNote> {
     })
 }
 
+/// Réaligne le statut d'une note sur son solde réel (`payee` si tout est
+/// encaissé, `emise` sinon). Une note annulée n'est pas touchée.
+///
+/// Point d'entrée unique : toute écriture de statut liée à un paiement passe
+/// par ici, pour qu'aucun appelant ne puisse forcer un statut incohérent.
+pub fn recalculer_statut(conn: &Connection, note_id: i64) -> AppResult<()> {
+    if notes::statut(conn, note_id)? == STATUT_ANNULEE {
+        return Ok(());
+    }
+    let statut = if solde(conn, note_id)?.payee {
+        STATUT_PAYEE
+    } else {
+        STATUT_EMISE
+    };
+    notes::set_statut(conn, note_id, statut)
+}
+
 /// Enregistre un paiement contre une note, en refusant tout sur-paiement, puis
 /// met à jour le statut de la note (payée si le solde atteint zéro).
 pub fn enregistrer(conn: &Connection, p: &NewPaiement) -> AppResult<i64> {
     if p.montant <= 0 {
         return Err(AppError::Validation(
             "le montant du paiement doit être positif".into(),
+        ));
+    }
+    // Une facture annulée n'attend plus rien : sans ce garde-fou, encaisser
+    // dessus la faisait silencieusement repasser en « emise ».
+    if notes::statut(conn, p.note_id)? == STATUT_ANNULEE {
+        return Err(AppError::Validation(
+            "cette facture est annulée : aucun paiement ne peut y être enregistré".into(),
         ));
     }
     let s = solde(conn, p.note_id)?;
@@ -46,15 +72,28 @@ pub fn enregistrer(conn: &Connection, p: &NewPaiement) -> AppResult<i64> {
         p.methode.as_deref(),
     )?;
 
-    let after = solde(conn, p.note_id)?;
-    let statut = if after.payee {
-        STATUT_PAYEE
-    } else {
-        STATUT_EMISE
-    };
-    notes::set_statut(conn, p.note_id, statut)?;
+    recalculer_statut(conn, p.note_id)?;
 
     Ok(id)
+}
+
+/// Annule un paiement saisi par erreur et réaligne le statut de la note.
+///
+/// Si un reçu avait été émis pour ce paiement, il est annulé du même coup :
+/// un reçu valide ne doit jamais attester d'un encaissement repris.
+pub fn annuler(conn: &mut Connection, paiement_id: i64) -> AppResult<()> {
+    let paiement = paiements::get(conn, paiement_id)?;
+    if paiement.annule {
+        return Ok(());
+    }
+    let tx = conn.transaction()?;
+    if let Some(recu) = crate::repositories::recus::find_by_paiement(&tx, paiement_id)? {
+        tx.execute("UPDATE recus SET annule = 1 WHERE id = ?1", [recu.id])?;
+    }
+    let note_id = paiements::annuler(&tx, paiement_id)?;
+    recalculer_statut(&tx, note_id)?;
+    tx.commit()?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -96,6 +135,8 @@ mod tests {
                     prestation_id: presta,
                     quantite: 3,
                 }],
+                remise_type: None,
+                remise_valeur: 0,
             },
         )
         .unwrap()
@@ -154,5 +195,143 @@ mod tests {
             enregistrer(&conn, &paiement(note, 0)),
             Err(AppError::Validation(_))
         ));
+    }
+
+    /// Une facture annulée n'accepte plus d'encaissement : sans ce garde-fou
+    /// elle repassait silencieusement en « emise ».
+    #[test]
+    fn paiement_sur_facture_annulee_est_refuse() {
+        let mut conn = open_in_memory().unwrap();
+        let note = note_de_300(&mut conn);
+        notes::annuler(&conn, note).unwrap();
+
+        let res = enregistrer(
+            &conn,
+            &NewPaiement {
+                note_id: note,
+                montant: 10_000,
+                date_paiement: "2026-06-18".into(),
+                methode: None,
+            },
+        );
+        assert!(matches!(res, Err(AppError::Validation(_))));
+        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_ANNULEE);
+    }
+
+    /// Annuler une facture déjà encaissée ferait disparaître l'argent des
+    /// totaux : c'est refusé tant que les paiements ne sont pas annulés.
+    #[test]
+    fn annulation_facture_refusee_si_paiement_actif() {
+        let mut conn = open_in_memory().unwrap();
+        let note = note_de_300(&mut conn);
+        let p = enregistrer(
+            &conn,
+            &NewPaiement {
+                note_id: note,
+                montant: 10_000,
+                date_paiement: "2026-06-18".into(),
+                methode: None,
+            },
+        )
+        .unwrap();
+
+        assert!(matches!(
+            notes::annuler(&conn, note),
+            Err(AppError::Validation(_))
+        ));
+
+        // Une fois le paiement annulé, l'annulation passe.
+        annuler(&mut conn, p).unwrap();
+        notes::annuler(&conn, note).unwrap();
+        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_ANNULEE);
+    }
+
+    /// Annuler un paiement le retire des totaux et réaligne le statut.
+    #[test]
+    fn annuler_paiement_reouvre_la_facture() {
+        let mut conn = open_in_memory().unwrap();
+        let note = note_de_300(&mut conn);
+        let p = enregistrer(
+            &conn,
+            &NewPaiement {
+                note_id: note,
+                montant: 30_000,
+                date_paiement: "2026-06-18".into(),
+                methode: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_PAYEE);
+
+        annuler(&mut conn, p).unwrap();
+        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_EMISE);
+        assert_eq!(solde(&conn, note).unwrap().paye, 0);
+        // Idempotent : ré-annuler ne change rien.
+        annuler(&mut conn, p).unwrap();
+        assert_eq!(solde(&conn, note).unwrap().paye, 0);
+    }
+
+    /// Annuler le reçu d'un paiement parmi deux ne doit pas rouvrir une
+    /// facture qui reste soldée par l'autre — le statut est recalculé, plus
+    /// écrit en dur.
+    #[test]
+    fn annulation_recu_recalcule_le_statut() {
+        use crate::services::recus_service;
+
+        let mut conn = open_in_memory().unwrap();
+        let note = note_de_300(&mut conn);
+        let p1 = enregistrer(
+            &conn,
+            &NewPaiement {
+                note_id: note,
+                montant: 10_000,
+                date_paiement: "2026-06-18".into(),
+                methode: None,
+            },
+        )
+        .unwrap();
+        enregistrer(
+            &conn,
+            &NewPaiement {
+                note_id: note,
+                montant: 20_000,
+                date_paiement: "2026-06-19".into(),
+                methode: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_PAYEE);
+
+        let recu = recus_service::generer(&conn, p1).unwrap();
+        recus_service::annuler(&mut conn, recu.id).unwrap();
+
+        // Il reste 10 000 dus : la facture est bien rouverte.
+        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_EMISE);
+        assert_eq!(solde(&conn, note).unwrap().solde, 10_000);
+    }
+
+    /// Annuler un paiement annule aussi son reçu : un reçu valide ne doit
+    /// jamais attester d'un encaissement repris.
+    #[test]
+    fn annuler_paiement_annule_son_recu() {
+        use crate::repositories::recus;
+        use crate::services::recus_service;
+
+        let mut conn = open_in_memory().unwrap();
+        let note = note_de_300(&mut conn);
+        let p = enregistrer(
+            &conn,
+            &NewPaiement {
+                note_id: note,
+                montant: 30_000,
+                date_paiement: "2026-06-18".into(),
+                methode: None,
+            },
+        )
+        .unwrap();
+        let recu = recus_service::generer(&conn, p).unwrap();
+
+        annuler(&mut conn, p).unwrap();
+        assert!(recus::get(&conn, recu.id).unwrap().annule);
     }
 }

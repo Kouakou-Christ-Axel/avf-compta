@@ -985,3 +985,38 @@ button:hover {
 .marge-negative {
   color: var(--danger);
 }
+
+/* ---------- Remise (formulaire facture) ---------- */
+
+.remise-champ {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.remise-champ select {
+  flex: 0 0 auto;
+}
+
+.remise-champ input {
+  flex: 1 1 6rem;
+  min-width: 0;
+}
+
+.total-detail {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+/* ---------- Prestations archivées ---------- */
+
+.ligne-archivee {
+  color: var(--muted);
+}
+
+.badge-archive {
+  margin-left: 0.4rem;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}

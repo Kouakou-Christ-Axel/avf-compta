@@ -48,6 +48,12 @@ export const updatePrestation = (prestation: Prestation) =>
   invoke<void>("update_prestation", { prestation });
 export const deletePrestation = (id: number) =>
   invoke<void>("delete_prestation", { id });
+/** Prestations encore proposées à la facturation (archivées exclues). */
+export const listPrestationsActives = () =>
+  invoke<Prestation[]>("list_prestations_actives");
+/** Archive (`actif = false`) ou réactive une prestation. */
+export const archiverPrestation = (id: number, actif: boolean) =>
+  invoke<void>("archiver_prestation", { id, actif });
 
 // --- Notes de frais ---
 export const listNotes = () => invoke<NoteDeFrais[]>("list_notes");
@@ -65,6 +71,9 @@ export const soldeNote = (noteId: number) =>
   invoke<SoldeNote>("solde_note", { noteId });
 export const enregistrerPaiement = (paiement: NewPaiement) =>
   invoke<number>("enregistrer_paiement", { paiement });
+/** Annule un paiement saisi par erreur (et son reçu éventuel). */
+export const annulerPaiement = (id: number) =>
+  invoke<void>("annuler_paiement", { id });
 
 // --- Reçus ---
 export const listRecus = () => invoke<Recu[]>("list_recus");

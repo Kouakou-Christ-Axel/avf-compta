@@ -7,6 +7,46 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Corrigé (audit production)
+
+- **Un seul reçu par paiement.** Prévisualiser un reçu en créait un nouveau à
+  chaque fois : plusieurs numéros pour un même encaissement, et un montant
+  compté plusieurs fois dans la liste des reçus. La génération est désormais
+  idempotente et le bouton propose « Voir RECU-XXXX » quand le reçu existe
+  déjà. La mise à jour dédoublonne automatiquement les reçus existants (le plus
+  ancien, celui remis au client, est conservé).
+- **Montants « 5.000 » et « 5,000 » acceptés.** Ces saisies étaient rejetées et
+  le message d'erreur s'affichait hors écran, en haut de la fenêtre : la
+  dépense semblait enregistrée alors qu'elle ne l'était nulle part. L'erreur
+  s'affiche maintenant sous le formulaire concerné.
+- **Annulation d'un paiement** saisi par erreur, avec ou sans reçu (le reçu
+  éventuel est annulé du même coup). Il n'existait aucun moyen de corriger un
+  encaissement erroné.
+- **Annulation d'une facture refusée tant qu'elle porte des paiements.**
+  L'annulation faisait disparaître l'argent réellement encaissé du total
+  encaissé et du solde client.
+- **Statut recalculé** après annulation d'un reçu, au lieu d'être remis en
+  « émise » en dur : une facture soldée par un autre paiement ne se rouvre plus
+  à tort. L'opération est désormais transactionnelle.
+- **Facture annulée verrouillée** : plus de paiement, de dépense ni de reçu
+  possible dessus (un paiement la faisait silencieusement repasser en
+  « émise »).
+- **Le reçu fige le total et le reste à payer** au moment de l'encaissement.
+  Un reçu réimprimé affichait auparavant le solde du jour.
+- **Message clair** au lieu de l'erreur SQLite « FOREIGN KEY constraint
+  failed » quand on supprime une prestation déjà facturée.
+- La dernière dépense saisie apparaît en tête de liste, et une confirmation est
+  demandée avant suppression.
+
+### Ajouté
+
+- **Remise sur facture**, globale, en francs ou en pourcentage. Elle est
+  déduite du total partout de la même façon (facture, liste, fiche client,
+  tableau de bord) et détaillée à l'impression.
+- **Archivage d'une prestation** : elle disparaît des nouvelles factures sans
+  toucher aux factures passées, où libellé et prix restent figés.
+- **Filigrane « ANNULÉE »** à l'impression d'une facture annulée.
+
 ### Ajouté / Modifié (lot 9–16)
 
 - **« Notes de frais » renommées « Factures »** dans toute l'interface.

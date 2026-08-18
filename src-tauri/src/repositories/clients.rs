@@ -43,9 +43,9 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Client>> {
 pub fn list_resume(conn: &Connection) -> AppResult<Vec<ClientResume>> {
     let mut stmt = conn.prepare(
         "SELECT c.id, c.nom, c.email, c.telephone,
-                COALESCE((SELECT SUM(l.prix_snapshot * l.quantite)
-                          FROM note_lignes l
-                          JOIN notes_de_frais n ON n.id = l.note_id
+                COALESCE((SELECT SUM(t.net)
+                          FROM note_totaux t
+                          JOIN notes_de_frais n ON n.id = t.note_id
                           WHERE n.client_id = c.id AND n.statut != 'annulee'), 0) AS total_facture,
                 COALESCE((SELECT SUM(p.montant)
                           FROM paiements p
@@ -199,6 +199,8 @@ mod tests {
                     prestation_id: presta,
                     quantite: 2,
                 }],
+                remise_type: None,
+                remise_valeur: 0,
             },
         )
         .unwrap();

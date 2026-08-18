@@ -7,6 +7,10 @@ pub struct Recu {
     pub numero: String,
     pub emis_le: String,
     pub annule: bool,
+    /// Total facturé de la note, figé au moment de l'émission du reçu.
+    pub note_total: i64,
+    /// Reste à payer après ce paiement, figé au moment de l'émission.
+    pub note_solde: i64,
 }
 
 /// Ligne du récapitulatif des reçus (liste), avec client et montant.

@@ -11,6 +11,8 @@ const detail: NoteDetail = {
     statut: "emise",
     echeance: null,
     cree_le: "2026-06-18",
+    remise_type: null,
+    remise_valeur: 0,
   },
   lignes: [
     {
@@ -22,6 +24,8 @@ const detail: NoteDetail = {
       quantite: 2,
     },
   ],
+  total_brut: 100000,
+  remise: 0,
   total: 100000,
   depenses: [],
   depenses_total: 0,

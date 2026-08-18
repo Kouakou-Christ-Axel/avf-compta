@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   annulerNote,
+  annulerPaiement,
   createDepense,
   createNote,
   deleteDepense,
@@ -13,7 +14,7 @@ import {
   listModesPaiement,
   listNotesResume,
   listPaiements,
-  listPrestations,
+  listPrestationsActives,
   soldeNote,
 } from "../api/client";
 import { formatMontant, parseMontant } from "../api/money";
@@ -28,6 +29,7 @@ import type {
   Parametres,
   Prestation,
   RecuDetail,
+  RemiseType,
   SoldeNote,
 } from "../api/types";
 import { RecuImprimable } from "../components/RecuImprimable";
@@ -38,6 +40,22 @@ import { correspond } from "../utils/recherche";
 
 function aujourdhui(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Montant de remise appliqué, miroir de la vue SQL `note_totaux` : arrondi au
+ * franc le plus proche et borné à [0, brut]. Sert uniquement à l'aperçu ; le
+ * montant qui fait foi est calculé côté base.
+ */
+function calculerRemise(
+  brut: number,
+  type: RemiseType | null,
+  valeur: number,
+): number {
+  if (!type || valeur <= 0) return 0;
+  const brute =
+    type === "pourcent" ? Math.floor((brut * valeur + 50) / 100) : valeur;
+  return Math.min(Math.max(brute, 0), brut);
 }
 
 function estEnRetard(n: NoteResume): boolean {
@@ -107,6 +125,8 @@ export function NotesPage() {
   const [clientId, setClientId] = useState("");
   const [echeance, setEcheance] = useState("");
   const [lignes, setLignes] = useState<NewNoteLigne[]>([]);
+  const [remiseType, setRemiseType] = useState<RemiseType | "">("");
+  const [remiseValeur, setRemiseValeur] = useState("");
 
   const rappelEnvoye = useRef(false);
 
@@ -118,7 +138,7 @@ export function NotesPage() {
     Promise.all([
       listNotesResume(),
       listClients(),
-      listPrestations(),
+      listPrestationsActives(),
       getParametres(),
       listModesPaiement(),
     ])
@@ -162,26 +182,51 @@ export function NotesPage() {
       setErreur("Sélectionnez un client et au moins une prestation.");
       return;
     }
+    let valeurRemise = 0;
+    if (remiseType) {
+      const v = parseMontant(remiseValeur);
+      if (v === null || v < 0) {
+        setErreur("Remise invalide");
+        return;
+      }
+      if (remiseType === "pourcent" && v > 100) {
+        setErreur("La remise ne peut pas dépasser 100 %.");
+        return;
+      }
+      valeurRemise = v;
+    }
     try {
       await createNote({
         client_id: Number(clientId),
         date_emission: aujourdhui(),
         echeance: echeance || null,
         lignes,
+        remise_type: remiseType || null,
+        remise_valeur: valeurRemise,
       });
       setClientId("");
       setEcheance("");
       setLignes([]);
+      setRemiseType("");
+      setRemiseValeur("");
       await rechargerNotes();
+      showToast("Facture créée");
     } catch (err) {
       setErreur(String(err));
     }
   }
 
-  const totalApercu = lignes.reduce((acc, l) => {
+  const brutApercu = lignes.reduce((acc, l) => {
     const p = prestations.find((pr) => pr.id === l.prestation_id);
     return acc + (p ? p.prix * l.quantite : 0);
   }, 0);
+  // Même règle que la vue SQL `note_totaux` : arrondi au franc, borné au brut.
+  const remiseApercu = calculerRemise(
+    brutApercu,
+    remiseType || null,
+    parseMontant(remiseValeur) ?? 0,
+  );
+  const totalApercu = brutApercu - remiseApercu;
 
   const nbRetard = notes.filter(estEnRetard).length;
   const nbProche = notes.filter(estEcheanceProche).length;
@@ -293,6 +338,33 @@ export function NotesPage() {
               onChange={(e) => setEcheance(e.target.value)}
             />
           </label>
+          <label>
+            <span>Remise (facultatif)</span>
+            <div className="remise-champ">
+              <select
+                aria-label="Type de remise"
+                value={remiseType}
+                onChange={(e) => {
+                  const v = e.target.value as RemiseType | "";
+                  setRemiseType(v);
+                  if (!v) setRemiseValeur("");
+                }}
+              >
+                <option value="">Aucune</option>
+                <option value="montant">En FCFA</option>
+                <option value="pourcent">En %</option>
+              </select>
+              {remiseType && (
+                <input
+                  inputMode="numeric"
+                  aria-label="Valeur de la remise"
+                  placeholder={remiseType === "pourcent" ? "10" : "5 000"}
+                  value={remiseValeur}
+                  onChange={(e) => setRemiseValeur(e.target.value)}
+                />
+              )}
+            </div>
+          </label>
           <span className="aide ref-auto">
             La référence est générée automatiquement (AA-MM-NNNN).
           </span>
@@ -344,6 +416,12 @@ export function NotesPage() {
 
         <div className="form-pied">
           <span className="total-apercu">
+            {remiseApercu > 0 && (
+              <span className="total-detail">
+                Sous-total {formatMontant(brutApercu)} − remise{" "}
+                {formatMontant(remiseApercu)} ={" "}
+              </span>
+            )}
             Total : <strong>{formatMontant(totalApercu)}</strong>
           </span>
           <button type="submit" className="btn-primary">
@@ -475,7 +553,10 @@ function DetailNote({
   const [depLibelle, setDepLibelle] = useState("");
   const [depMontant, setDepMontant] = useState("");
   const [depDate, setDepDate] = useState(aujourdhui());
+  const [depEnvoi, setDepEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [erreurDepense, setErreurDepense] = useState<string | null>(null);
+  const [recuEnCours, setRecuEnCours] = useState<number | null>(null);
 
   async function recharger() {
     const [d, s, p] = await Promise.all([
@@ -527,13 +608,45 @@ function DetailNote({
     if (detail && solde) onImprimer(detail, solde);
   }
 
-  async function imprimerRecu(paiementId: number) {
+  /**
+   * Ouvre le reçu du paiement. La commande est idempotente côté Rust : si un
+   * reçu existe déjà, c'est lui qui revient — prévisualiser ne crée plus de
+   * doublon. Le bouton est verrouillé le temps de l'appel pour éviter le
+   * double-clic.
+   */
+  async function ouvrirRecu(paiement: Paiement) {
+    if (recuEnCours !== null) return;
     setErreur(null);
+    setRecuEnCours(paiement.id);
     try {
-      const recu = await genererRecu(paiementId);
+      const recu = await genererRecu(paiement.id);
       const detailRecu = await getRecu(recu.id);
       onRecu(detailRecu);
-      showToast(`Reçu ${recu.numero} généré`);
+      if (paiement.recu_id === null) showToast(`Reçu ${recu.numero} généré`);
+      await recharger();
+    } catch (err) {
+      setErreur(String(err));
+    } finally {
+      setRecuEnCours(null);
+    }
+  }
+
+  async function annulerLePaiement(paiement: Paiement) {
+    const avecRecu = paiement.recu_numero
+      ? ` Le reçu ${paiement.recu_numero} sera annulé.`
+      : "";
+    if (
+      !confirm(
+        `Annuler le paiement de ${formatMontant(paiement.montant)} ?${avecRecu}`,
+      )
+    )
+      return;
+    setErreur(null);
+    try {
+      await annulerPaiement(paiement.id);
+      await recharger();
+      onChangement();
+      showToast("Paiement annulé");
     } catch (err) {
       setErreur(String(err));
     }
@@ -541,20 +654,24 @@ function DetailNote({
 
   async function ajouterDepense(e: React.FormEvent) {
     e.preventDefault();
-    setErreur(null);
+    // L'erreur est affichée sous le formulaire : le bandeau en haut du modal
+    // est hors écran quand on saisit une dépense, et les rejets passaient
+    // inaperçus (la dépense semblait enregistrée alors qu'elle ne l'était pas).
+    setErreurDepense(null);
     const m = parseMontant(depMontant);
     if (!depLibelle.trim()) {
-      setErreur("Libellé de dépense requis");
+      setErreurDepense("Libellé de dépense requis");
       return;
     }
     if (m === null || m <= 0) {
-      setErreur("Montant de dépense invalide");
+      setErreurDepense("Montant de dépense invalide (ex : 5 000 ou 5.000)");
       return;
     }
     if (!depDate) {
-      setErreur("Date de dépense requise");
+      setErreurDepense("Date de dépense requise");
       return;
     }
+    setDepEnvoi(true);
     try {
       await createDepense({
         note_id: noteId,
@@ -566,24 +683,49 @@ function DetailNote({
       setDepMontant("");
       setDepDate(aujourdhui());
       await recharger();
+      onChangement();
       showToast("Dépense ajoutée");
     } catch (err) {
-      setErreur(String(err));
+      setErreurDepense(String(err));
+    } finally {
+      setDepEnvoi(false);
     }
   }
 
   async function supprimerDepense(id: number) {
-    setErreur(null);
+    if (!confirm("Supprimer cette dépense ?")) return;
+    setErreurDepense(null);
     try {
       await deleteDepense(id);
       await recharger();
+      onChangement();
       showToast("Dépense supprimée");
     } catch (err) {
-      setErreur(String(err));
+      setErreurDepense(String(err));
     }
   }
 
-  if (!detail || !solde) return null;
+  // Avant : `return null` masquait l'erreur de chargement rendue plus bas, et
+  // le bouton « Détail » semblait ne rien faire du tout.
+  if (!detail || !solde) {
+    return (
+      <div className="modal-overlay" role="dialog" aria-modal="true">
+        <div className="modal">
+          <div className="modal-tete">
+            <h3>Facture</h3>
+            <button className="x" onClick={onFermer} aria-label="Fermer">
+              ✕
+            </button>
+          </div>
+          {erreur ? (
+            <p className="erreur">{erreur}</p>
+          ) : (
+            <p className="aide">Chargement…</p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -683,7 +825,22 @@ function DetailNote({
                     {p.annule ? (
                       <span className="badge badge-retard">Annulé</span>
                     ) : (
-                      <button onClick={() => imprimerRecu(p.id)}>Reçu</button>
+                      <>
+                        <button
+                          onClick={() => ouvrirRecu(p)}
+                          disabled={recuEnCours !== null}
+                        >
+                          {p.recu_numero
+                            ? `Voir ${p.recu_numero}`
+                            : "Générer le reçu"}
+                        </button>
+                        <button
+                          className="btn-danger"
+                          onClick={() => annulerLePaiement(p)}
+                        >
+                          Annuler
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -755,10 +912,11 @@ function DetailNote({
             value={depDate}
             onChange={(e) => setDepDate(e.target.value)}
           />
-          <button type="submit" className="btn-primary">
-            Ajouter
+          <button type="submit" className="btn-primary" disabled={depEnvoi}>
+            {depEnvoi ? "Ajout…" : "Ajouter"}
           </button>
         </form>
+        {erreurDepense && <p className="erreur">{erreurDepense}</p>}
 
         <div className="marge-box">
           <div>
