@@ -215,7 +215,7 @@ mod tests {
         .unwrap();
 
         let p1 = paiements_service::enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 4_000,
@@ -229,7 +229,7 @@ mod tests {
 
         // Un second encaissement ne doit pas rétroagir sur le premier reçu.
         paiements_service::enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 6_000,

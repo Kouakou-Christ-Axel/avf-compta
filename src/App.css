@@ -1091,3 +1091,29 @@ button:hover {
     grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   }
 }
+
+/* ---------- Bandeau de mise à jour ---------- */
+
+.bandeau-maj {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent, #1d4ed8);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 0.9rem;
+}
+
+.lien {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent, #1d4ed8);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

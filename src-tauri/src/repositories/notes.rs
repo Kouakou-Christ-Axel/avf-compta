@@ -153,14 +153,6 @@ pub fn set_statut(conn: &Connection, id: i64, statut: &str) -> AppResult<()> {
     Ok(())
 }
 
-pub fn delete(conn: &Connection, id: i64) -> AppResult<()> {
-    let n = conn.execute("DELETE FROM notes_de_frais WHERE id = ?1", [id])?;
-    if n == 0 {
-        return Err(AppError::NotFound(format!("note {id}")));
-    }
-    Ok(())
-}
-
 /// Annule une note (statut « annulee ») ; elle est exclue des totaux/stats.
 ///
 /// Refusé tant qu'un paiement valide y est rattaché : les totaux excluant les
@@ -226,7 +218,7 @@ mod tests {
         )
         .unwrap();
         paiements_service::enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 12_000,

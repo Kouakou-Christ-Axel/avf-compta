@@ -8,6 +8,7 @@ import { RecusPage } from "./pages/RecusPage";
 import { StatsPage } from "./pages/StatsPage";
 import { ParametresPage } from "./pages/ParametresPage";
 import { ToastProvider } from "./components/ToastProvider";
+import { useMajDisponible } from "./components/useMajDisponible";
 
 const ONGLETS = [
   { id: "stats", label: "Tableau de bord", icone: "▱" },
@@ -28,6 +29,7 @@ function App() {
   const [repliee, setRepliee] = useState(
     () => localStorage.getItem(CLE_SIDEBAR_REPLIEE) === "1",
   );
+  const majDisponible = useMajDisponible();
 
   function basculerSidebar() {
     setRepliee((v) => {
@@ -72,6 +74,14 @@ function App() {
         </aside>
 
         <main className="content">
+          {majDisponible && onglet !== "parametres" && (
+            <div className="bandeau-maj" role="status">
+              Version <strong>{majDisponible}</strong> disponible.
+              <button className="lien" onClick={() => setOnglet("parametres")}>
+                Installer depuis les Paramètres
+              </button>
+            </div>
+          )}
           {onglet === "stats" && <StatsPage />}
           {onglet === "clients" && <ClientsPage />}
           {onglet === "prestations" && <PrestationsPage />}

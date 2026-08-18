@@ -22,12 +22,19 @@ pub fn get(conn: &Connection) -> AppResult<Parametres> {
 }
 
 /// Enregistre (remplace) le profil du cabinet.
+///
+/// `INSERT … ON CONFLICT` plutôt qu'un simple `UPDATE` : si la ligne unique
+/// venait à manquer (base restaurée d'une version antérieure, ligne effacée),
+/// l'enregistrement était un échec silencieux — l'utilisateur voyait
+/// « Paramètres enregistrés » sans que rien ne soit écrit.
 pub fn save(conn: &Connection, p: &Parametres) -> AppResult<()> {
     conn.execute(
-        "UPDATE parametres
+        "INSERT INTO parametres
+            (id, cabinet_nom, sous_titre, email, telephone, coordonnees_paiement, logo)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(id) DO UPDATE
          SET cabinet_nom = ?1, sous_titre = ?2, email = ?3, telephone = ?4,
-             coordonnees_paiement = ?5, logo = ?6
-         WHERE id = 1",
+             coordonnees_paiement = ?5, logo = ?6",
         rusqlite::params![
             p.cabinet_nom,
             p.sous_titre,

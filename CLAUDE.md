@@ -58,7 +58,10 @@ Layered so business logic is testable without the Tauri runtime:
 
 - `money.rs` — `Money(i64)` newtype; the currency is **franc CFA (XOF)**, which
   has **no minor unit**, so amounts are **whole integer francs, never floats**.
-  Formatting is French-grouped (`150 000 FCFA`); parsing rejects decimals.
+  Provides overflow-checked arithmetic (`checked_add`, `checked_mul_qty`) and
+  French-grouped formatting (`150 000 FCFA`). Parsing user input lives only in
+  `src/api/money.ts` — the backend receives amounts already as integers, so a
+  second Rust parser would only be a copy free to drift.
 - `db/` — `open()`/`open_in_memory()` set `PRAGMA foreign_keys = ON` (per
   connection!) and run migrations; `db/migrations.rs` holds the schema.
 - `models/` — serde DTOs shared with the frontend.
@@ -84,7 +87,9 @@ permissions for data work.
 
 - `src/api/client.ts` — the **only** place that calls `invoke`; one typed wrapper
   per command. `src/api/types.ts` mirrors the Rust DTOs (amounts as `number` of
-  cents). `src/api/money.ts` — `formatEuros`/`parseEuros` mirror the Rust logic.
+  whole XOF francs). `src/api/money.ts` — `formatMontant` mirrors the Rust
+  `Display`; `parseMontant` accepts the usual thousands separators (space, dot,
+  comma in groups of three) and rejects decimals.
 - `src/pages/*` — one page per domain area, navigated from `src/App.tsx`.
 - Tests mock the bridge with the official `@tauri-apps/api/mocks` `mockIPC`
   (see `src/test/setup.ts`). Test the api client and a few page smoke tests;

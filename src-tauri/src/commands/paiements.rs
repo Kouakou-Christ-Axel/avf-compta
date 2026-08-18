@@ -19,8 +19,8 @@ pub fn solde_note(state: State<'_, DbState>, note_id: i64) -> AppResult<SoldeNot
 
 #[tauri::command]
 pub fn enregistrer_paiement(state: State<'_, DbState>, paiement: NewPaiement) -> AppResult<i64> {
-    let conn = db(&state);
-    paiements_service::enregistrer(&conn, &paiement)
+    let mut conn = db(&state);
+    paiements_service::enregistrer(&mut conn, &paiement)
 }
 
 #[tauri::command]

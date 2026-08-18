@@ -219,7 +219,7 @@ mod tests {
         )
         .unwrap();
         paiements_service::enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 50_000,

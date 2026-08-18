@@ -1,5 +1,6 @@
 use crate::error::{AppError, AppResult};
 use crate::models::{NewPaiement, SoldeNote};
+use crate::money::Money;
 use crate::repositories::{notes, paiements};
 use rusqlite::Connection;
 
@@ -43,7 +44,11 @@ pub fn recalculer_statut(conn: &Connection, note_id: i64) -> AppResult<()> {
 
 /// Enregistre un paiement contre une note, en refusant tout sur-paiement, puis
 /// met à jour le statut de la note (payée si le solde atteint zéro).
-pub fn enregistrer(conn: &Connection, p: &NewPaiement) -> AppResult<i64> {
+///
+/// L'insertion et la mise à jour du statut sont dans une **transaction** :
+/// séparées, un incident entre les deux laissait un paiement encaissé sur une
+/// facture restée « emise ».
+pub fn enregistrer(conn: &mut Connection, p: &NewPaiement) -> AppResult<i64> {
     if p.montant <= 0 {
         return Err(AppError::Validation(
             "le montant du paiement doit être positif".into(),
@@ -59,20 +64,22 @@ pub fn enregistrer(conn: &Connection, p: &NewPaiement) -> AppResult<i64> {
     let s = solde(conn, p.note_id)?;
     if p.montant > s.solde {
         return Err(AppError::Validation(format!(
-            "sur-paiement refusé: solde dû {} FCFA, paiement {} FCFA",
-            s.solde, p.montant
+            "sur-paiement refusé : il reste {} à payer, le paiement est de {}",
+            Money::from_xof(s.solde),
+            Money::from_xof(p.montant)
         )));
     }
 
+    let tx = conn.transaction()?;
     let id = paiements::insert(
-        conn,
+        &tx,
         p.note_id,
         p.montant,
         &p.date_paiement,
         p.methode.as_deref(),
     )?;
-
-    recalculer_statut(conn, p.note_id)?;
+    recalculer_statut(&tx, p.note_id)?;
+    tx.commit()?;
 
     Ok(id)
 }
@@ -105,7 +112,7 @@ mod tests {
     use crate::repositories::{clients, prestations};
     use crate::services::notes_service;
 
-    /// Crée une note de 30 000 centimes (3 × 10 000) et renvoie son id.
+    /// Crée une note de 30 000 FCFA (3 × 10 000) et renvoie son id.
     fn note_de_300(conn: &mut Connection) -> i64 {
         let client = clients::create(
             conn,
@@ -155,7 +162,7 @@ mod tests {
     fn partial_payment_updates_solde() {
         let mut conn = open_in_memory().unwrap();
         let note = note_de_300(&mut conn);
-        enregistrer(&conn, &paiement(note, 10_000)).unwrap();
+        enregistrer(&mut conn, &paiement(note, 10_000)).unwrap();
         let s = solde(&conn, note).unwrap();
         assert_eq!(s.paye, 10_000);
         assert_eq!(s.solde, 20_000);
@@ -167,8 +174,8 @@ mod tests {
     fn full_payment_marks_note_paid() {
         let mut conn = open_in_memory().unwrap();
         let note = note_de_300(&mut conn);
-        enregistrer(&conn, &paiement(note, 20_000)).unwrap();
-        enregistrer(&conn, &paiement(note, 10_000)).unwrap();
+        enregistrer(&mut conn, &paiement(note, 20_000)).unwrap();
+        enregistrer(&mut conn, &paiement(note, 10_000)).unwrap();
         let s = solde(&conn, note).unwrap();
         assert_eq!(s.solde, 0);
         assert!(s.payee);
@@ -180,7 +187,7 @@ mod tests {
         let mut conn = open_in_memory().unwrap();
         let note = note_de_300(&mut conn);
         assert!(matches!(
-            enregistrer(&conn, &paiement(note, 30_001)),
+            enregistrer(&mut conn, &paiement(note, 30_001)),
             Err(AppError::Validation(_))
         ));
         // Aucun paiement enregistré.
@@ -192,7 +199,7 @@ mod tests {
         let mut conn = open_in_memory().unwrap();
         let note = note_de_300(&mut conn);
         assert!(matches!(
-            enregistrer(&conn, &paiement(note, 0)),
+            enregistrer(&mut conn, &paiement(note, 0)),
             Err(AppError::Validation(_))
         ));
     }
@@ -206,7 +213,7 @@ mod tests {
         notes::annuler(&conn, note).unwrap();
 
         let res = enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 10_000,
@@ -225,7 +232,7 @@ mod tests {
         let mut conn = open_in_memory().unwrap();
         let note = note_de_300(&mut conn);
         let p = enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 10_000,
@@ -252,7 +259,7 @@ mod tests {
         let mut conn = open_in_memory().unwrap();
         let note = note_de_300(&mut conn);
         let p = enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 30_000,
@@ -281,7 +288,7 @@ mod tests {
         let mut conn = open_in_memory().unwrap();
         let note = note_de_300(&mut conn);
         let p1 = enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 10_000,
@@ -291,7 +298,7 @@ mod tests {
         )
         .unwrap();
         enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 20_000,
@@ -320,7 +327,7 @@ mod tests {
         let mut conn = open_in_memory().unwrap();
         let note = note_de_300(&mut conn);
         let p = enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 30_000,

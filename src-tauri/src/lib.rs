@@ -2,10 +2,8 @@ mod commands;
 mod db;
 mod error;
 mod models;
-// Utilitaire monétaire canonique (analyse/format des montants), entièrement
-// testé et destiné à la couche commandes/UI ; conservé même si non encore
-// appelé hors tests.
-#[allow(dead_code)]
+// Utilitaire monétaire canonique : arithmétique protégée contre le
+// débordement et formatage français des montants.
 mod money;
 mod repositories;
 mod services;
@@ -57,7 +55,6 @@ pub fn run() {
             commands::notes::get_note,
             commands::notes::create_note,
             commands::notes::update_note,
-            commands::notes::delete_note,
             commands::notes::annuler_note,
             commands::paiements::list_paiements,
             commands::paiements::solde_note,

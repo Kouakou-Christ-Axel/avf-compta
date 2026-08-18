@@ -1,5 +1,6 @@
 use crate::error::{AppError, AppResult};
 use crate::models::NewNote;
+use crate::money::Money;
 use crate::repositories::{notes, prestations};
 use rusqlite::Connection;
 
@@ -44,6 +45,34 @@ fn valider_lignes(n: &NewNote) -> AppResult<()> {
     Ok(())
 }
 
+/// Vérifie que le total de la note tient dans un entier 64 bits.
+///
+/// SQLite ne signale pas le débordement d'un `prix × quantité` : il bascule en
+/// flottant, et la relecture en entier échoue plus tard sur une erreur de type
+/// illisible. On refuse donc la saisie au moment où elle est faite.
+fn valider_total(conn: &Connection, n: &NewNote) -> AppResult<()> {
+    let mut total = Money::ZERO;
+    for l in &n.lignes {
+        let p = prestations::get(conn, l.prestation_id)?;
+        let ligne = Money::from_xof(p.prix)
+            .checked_mul_qty(l.quantite)
+            .and_then(|m| total.checked_add(m))
+            .ok_or_else(|| {
+                AppError::Validation(format!(
+                    "montant trop élevé : « {} » × {} dépasse les limites de calcul",
+                    p.libelle, l.quantite
+                ))
+            })?;
+        total = ligne;
+    }
+    if total.xof() < 0 {
+        return Err(AppError::Validation(
+            "le total de la facture ne peut pas être négatif".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// Extrait l'année (2 chiffres) et le mois d'une date « YYYY-MM-DD ».
 fn annee_mois(date: &str) -> AppResult<(&str, &str)> {
     let bytes = date.as_bytes();
@@ -62,15 +91,26 @@ fn annee_mois(date: &str) -> AppResult<(&str, &str)> {
 
 /// Génère la référence séquentielle d'une note au format `AA-MM-NNNN`
 /// (séquence remise à zéro chaque mois).
+///
+/// La séquence part du **plus grand numéro déjà attribué** dans le mois, et non
+/// d'un `COUNT(*)` : compter fait reculer la séquence dès qu'une facture du
+/// mois manque, et deux factures finissent par porter le même identifiant
+/// légal. L'application ne supprime plus de facture (seule l'annulation
+/// existe), mais une base restaurée ou retouchée à la main peut présenter des
+/// trous.
 fn generer_reference(conn: &Connection, date_emission: &str) -> AppResult<String> {
     let (aa, mm) = annee_mois(date_emission)?;
     let prefix = format!("{aa}-{mm}-");
-    let deja: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM notes_de_frais WHERE reference LIKE ?1",
+    let dernier: Option<String> = conn.query_row(
+        "SELECT MAX(reference) FROM notes_de_frais WHERE reference LIKE ?1",
         [format!("{prefix}%")],
         |r| r.get(0),
     )?;
-    Ok(format!("{prefix}{:04}", deja + 1))
+    let suivant = dernier
+        .and_then(|r| r.rsplit('-').next().and_then(|n| n.parse::<i64>().ok()))
+        .unwrap_or(0)
+        + 1;
+    Ok(format!("{prefix}{suivant:04}"))
 }
 
 /// Crée une note de frais et ses lignes de façon **atomique** : le libellé et
@@ -79,6 +119,7 @@ fn generer_reference(conn: &Connection, date_emission: &str) -> AppResult<String
 /// toute la transaction est annulée (aucune note orpheline).
 pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
     valider_lignes(n)?;
+    valider_total(conn, n)?;
     valider_remise(n.remise_type.as_deref(), n.remise_valeur)?;
     // Une remise sans type saisi n'est pas appliquée : on normalise à zéro pour
     // que la valeur stockée reflète toujours ce qui est réellement déduit.
@@ -140,6 +181,7 @@ fn inserer_lignes(conn: &Connection, note_id: i64, n: &NewNote) -> AppResult<()>
 /// une facture reprend donc les prix **actuels** des prestations.
 pub fn update_note(conn: &mut Connection, id: i64, n: &NewNote) -> AppResult<()> {
     valider_lignes(n)?;
+    valider_total(conn, n)?;
     valider_remise(n.remise_type.as_deref(), n.remise_valeur)?;
     annee_mois(&n.date_emission)?;
 
@@ -465,7 +507,7 @@ mod tests {
         let (client, presta) = seed(&conn);
         let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
         paiements_service::enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: id,
                 montant: 10_000,
@@ -508,6 +550,90 @@ mod tests {
         assert!(update_note(&mut conn, id, &modif).is_err());
 
         assert_eq!(notes::total(&conn, id).unwrap(), 10_000);
+        assert_eq!(notes::lignes(&conn, id).unwrap().len(), 1);
+    }
+
+    /// Un total de ligne qui déborde l'entier 64 bits est refusé à la saisie.
+    /// SQLite ne signalerait rien : il basculerait en flottant, et la relecture
+    /// échouerait bien plus tard sur une erreur de type illisible.
+    #[test]
+    fn total_qui_deborde_est_refuse() {
+        let mut conn = open_in_memory().unwrap();
+        let client = clients::create(
+            &conn,
+            &NewClient {
+                nom: "Acme".into(),
+                email: None,
+                telephone: None,
+                adresse: None,
+            },
+        )
+        .unwrap();
+        let presta = prestations::create(
+            &conn,
+            &NewPrestation {
+                libelle: "Astronomique".into(),
+                prix: i64::MAX / 2,
+            },
+        )
+        .unwrap();
+
+        let mut n = new_note(client, presta, 1);
+        n.lignes[0].quantite = 10;
+        match create_note(&mut conn, &n).unwrap_err() {
+            AppError::Validation(msg) => assert!(msg.contains("trop élevé"), "message: {msg}"),
+            other => panic!("expected Validation, got {other:?}"),
+        }
+        // Rien n'a été écrit.
+        assert!(notes::list(&conn).unwrap().is_empty());
+    }
+
+    /// La séquence des références repart du dernier numéro attribué. Avec un
+    /// `COUNT(*)`, un trou dans la série faisait reculer la séquence et deux
+    /// factures se retrouvaient avec la même référence.
+    #[test]
+    fn reference_repart_du_dernier_numero() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        let deuxieme = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        let troisieme = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        assert_eq!(
+            notes::get(&conn, troisieme).unwrap().reference.as_deref(),
+            Some("26-06-0003")
+        );
+
+        // Base retouchée à la main : il manque la facture du milieu.
+        conn.execute("DELETE FROM notes_de_frais WHERE id = ?1", [deuxieme])
+            .unwrap();
+
+        let suivante = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        assert_eq!(
+            notes::get(&conn, suivante).unwrap().reference.as_deref(),
+            Some("26-06-0004"),
+            "la séquence ne doit pas recycler une référence déjà attribuée"
+        );
+    }
+
+    /// Annuler une facture sans paiement la retire des totaux mais la conserve.
+    #[test]
+    fn annuler_exclut_des_totaux_sans_supprimer() {
+        use crate::repositories::stats;
+
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let id = create_note(&mut conn, &new_note(client, presta, 2)).unwrap();
+        assert_eq!(
+            stats::resume(&conn, None, None).unwrap().total_facture,
+            20_000
+        );
+
+        notes::annuler(&conn, id).unwrap();
+
+        assert_eq!(stats::resume(&conn, None, None).unwrap().total_facture, 0);
+        assert_eq!(stats::resume(&conn, None, None).unwrap().nb_notes, 0);
+        // La facture reste consultable, avec ses lignes.
+        assert_eq!(notes::get(&conn, id).unwrap().statut, "annulee");
         assert_eq!(notes::lignes(&conn, id).unwrap().len(), 1);
     }
 }
