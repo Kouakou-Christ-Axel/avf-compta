@@ -22,24 +22,15 @@ export function SauvegardeBase() {
       .catch(() => setChemin(null));
   }, []);
 
-  function horodatage(): string {
-    const d = new Date();
-    const p = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-  }
-
+  // La boîte « Enregistrer sous »/« Ouvrir » s'ouvre côté Rust (voir
+  // commands::sauvegarde) : le chemin ne transite jamais par le JS, pour
+  // qu'un renderer compromis ne puisse pas le falsifier.
   async function sauvegarder() {
     setErreur(null);
-    const { save } = await import("@tauri-apps/plugin-dialog");
-    const cible = await save({
-      defaultPath: `avf-compta-${horodatage()}.sqlite`,
-      filters: [{ name: "Sauvegarde avf-compta", extensions: ["sqlite"] }],
-    });
-    if (!cible) return;
     setEtat("travail");
     try {
-      await sauvegarderBase(cible);
-      showToast("Sauvegarde enregistrée");
+      const fait = await sauvegarderBase();
+      if (fait) showToast("Sauvegarde enregistrée");
     } catch (e) {
       setErreur(String(e));
     } finally {
@@ -49,24 +40,20 @@ export function SauvegardeBase() {
 
   async function restaurer() {
     setErreur(null);
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const source = await open({
-      multiple: false,
-      filters: [{ name: "Sauvegarde avf-compta", extensions: ["sqlite"] }],
-    });
-    if (!source || typeof source !== "string") return;
     if (
       !confirm(
-        "Restaurer cette sauvegarde ? Toutes les données actuelles seront " +
+        "Restaurer une sauvegarde ? Toutes les données actuelles seront " +
           "remplacées au redémarrage. La base actuelle est conservée à côté " +
-          "sous « .avant-restauration ».",
+          "sous « .avant-restauration ». Le fichier sera choisi dans la " +
+          "boîte de dialogue qui va s'ouvrir.",
       )
     )
       return;
     setEtat("travail");
     try {
-      await restaurerBase(source);
-      setEtat("a-redemarrer");
+      const fait = await restaurerBase();
+      if (fait) setEtat("a-redemarrer");
+      else setEtat("idle");
     } catch (e) {
       setErreur(String(e));
       setEtat("idle");
