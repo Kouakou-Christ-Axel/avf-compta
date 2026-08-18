@@ -9,6 +9,11 @@ pub struct Paiement {
     pub methode: Option<String>,
     pub annule: bool,
     pub cree_le: String,
+    /// Reçu déjà émis pour ce paiement, s'il y en a un (au plus un depuis la
+    /// migration v10). Permet à l'interface de proposer « Voir le reçu »
+    /// plutôt que d'en générer un second.
+    pub recu_id: Option<i64>,
+    pub recu_numero: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

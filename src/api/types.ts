@@ -30,6 +30,9 @@ export interface NewPrestation {
   prix: number;
 }
 
+/** Remise globale d'une facture : montant fixe en francs, ou pourcentage. */
+export type RemiseType = "montant" | "pourcent";
+
 export interface NoteDeFrais {
   id: number;
   client_id: number;
@@ -38,6 +41,8 @@ export interface NoteDeFrais {
   statut: string;
   echeance: string | null;
   cree_le: string;
+  remise_type: RemiseType | null;
+  remise_valeur: number;
 }
 
 export interface NoteLigne {
@@ -52,6 +57,11 @@ export interface NoteLigne {
 export interface NoteDetail {
   note: NoteDeFrais;
   lignes: NoteLigne[];
+  /** Total des lignes avant remise. */
+  total_brut: number;
+  /** Montant de la remise réellement déduite. */
+  remise: number;
+  /** Total net facturé (brut − remise). */
   total: number;
   depenses: Depense[];
   depenses_total: number;
@@ -118,6 +128,9 @@ export interface NewNote {
   date_emission: string;
   echeance: string | null;
   lignes: NewNoteLigne[];
+  remise_type: RemiseType | null;
+  /** Francs si `remise_type === "montant"`, points de % sinon. */
+  remise_valeur: number;
 }
 
 export interface Paiement {
@@ -128,6 +141,9 @@ export interface Paiement {
   methode: string | null;
   annule: boolean;
   cree_le: string;
+  /** Reçu déjà émis pour ce paiement (au plus un), s'il existe. */
+  recu_id: number | null;
+  recu_numero: string | null;
 }
 
 export interface NewPaiement {
@@ -151,6 +167,10 @@ export interface Recu {
   numero: string;
   emis_le: string;
   annule: boolean;
+  /** Total facturé figé à l'émission du reçu. */
+  note_total: number;
+  /** Reste à payer figé à l'émission du reçu. */
+  note_solde: number;
 }
 
 export interface RecuDetail {

@@ -6,10 +6,40 @@ use rusqlite::Connection;
 /// Statut initial d'une note de frais.
 pub const STATUT_EMISE: &str = "emise";
 
+/// Remise exprimée en francs CFA.
+pub const REMISE_MONTANT: &str = "montant";
+/// Remise exprimée en pourcentage du total des lignes.
+pub const REMISE_POURCENT: &str = "pourcent";
+
+/// Valide la remise saisie. Le montant réellement déduit est calculé par la vue
+/// SQL `note_totaux` (bornée à [0, brut]) : ici on ne contrôle que la saisie.
+fn valider_remise(remise_type: Option<&str>, valeur: i64) -> AppResult<()> {
+    match remise_type {
+        None => Ok(()),
+        Some(REMISE_MONTANT) | Some(REMISE_POURCENT) if valeur < 0 => Err(AppError::Validation(
+            "la remise ne peut pas être négative".into(),
+        )),
+        Some(REMISE_POURCENT) if valeur > 100 => Err(AppError::Validation(
+            "la remise en pourcentage ne peut pas dépasser 100 %".into(),
+        )),
+        Some(REMISE_MONTANT) | Some(REMISE_POURCENT) => Ok(()),
+        Some(autre) => Err(AppError::Validation(format!(
+            "type de remise inconnu: {autre}"
+        ))),
+    }
+}
+
 /// Extrait l'année (2 chiffres) et le mois d'une date « YYYY-MM-DD ».
 fn annee_mois(date: &str) -> AppResult<(&str, &str)> {
     let bytes = date.as_bytes();
-    if date.len() < 7 || bytes[4] != b'-' {
+    // `date` vient du frontend : on exige de l'ASCII avant tout découpage par
+    // octets, sinon un caractère multi-octets ferait paniquer le slicing.
+    let valide = date.len() >= 7
+        && date.is_ascii()
+        && bytes[4] == b'-'
+        && bytes[..4].iter().all(u8::is_ascii_digit)
+        && bytes[5..7].iter().all(u8::is_ascii_digit);
+    if !valide {
         return Err(AppError::Validation(format!("date invalide: {date}")));
     }
     Ok((&date[2..4], &date[5..7]))
@@ -45,20 +75,31 @@ pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
             ));
         }
     }
+    valider_remise(n.remise_type.as_deref(), n.remise_valeur)?;
+    // Une remise sans type saisi n'est pas appliquée : on normalise à zéro pour
+    // que la valeur stockée reflète toujours ce qui est réellement déduit.
+    let remise_valeur = if n.remise_type.is_some() {
+        n.remise_valeur
+    } else {
+        0
+    };
 
     let tx = conn.transaction()?;
     let reference = generer_reference(&tx, &n.date_emission)?;
     tx.execute(
         "INSERT INTO notes_de_frais
-            (client_id, reference, date_emission, statut, echeance, cree_le)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (client_id, reference, date_emission, statut, echeance, cree_le,
+             remise_type, remise_valeur)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         rusqlite::params![
             n.client_id,
             reference,
             n.date_emission,
             STATUT_EMISE,
             n.echeance,
-            crate::repositories::now()
+            crate::repositories::now(),
+            n.remise_type,
+            remise_valeur
         ],
     )?;
     let note_id = tx.last_insert_rowid();
@@ -117,6 +158,8 @@ mod tests {
                 prestation_id,
                 quantite: qte,
             }],
+            remise_type: None,
+            remise_valeur: 0,
         }
     }
 
@@ -191,6 +234,115 @@ mod tests {
         ));
         assert!(matches!(
             create_note(&mut conn, &new_note(client, presta, 0)),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    /// La remise doit être identique partout : détail de la facture, liste des
+    /// factures, fiche client et tableau de bord lisent tous la vue
+    /// `note_totaux`.
+    #[test]
+    fn remise_coherente_partout() {
+        use crate::repositories::{clients as repo_clients, stats};
+
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let mut n = new_note(client, presta, 3); // 3 × 10 000 = 30 000
+        n.remise_type = Some(REMISE_POURCENT.into());
+        n.remise_valeur = 10;
+        let id = create_note(&mut conn, &n).unwrap();
+
+        let (brut, remise, net) = notes::totaux(&conn, id).unwrap();
+        assert_eq!((brut, remise, net), (30_000, 3_000, 27_000));
+        assert_eq!(notes::total(&conn, id).unwrap(), 27_000);
+        assert_eq!(notes::list_resume(&conn).unwrap()[0].total, 27_000);
+        assert_eq!(
+            repo_clients::list_resume(&conn).unwrap()[0].total_facture,
+            27_000
+        );
+        assert_eq!(stats::resume(&conn).unwrap().total_facture, 27_000);
+        assert_eq!(stats::mensuelles(&conn).unwrap()[0].ca, 27_000);
+    }
+
+    #[test]
+    fn remise_en_montant_et_plafonnement() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+
+        let mut n = new_note(client, presta, 1); // 10 000
+        n.remise_type = Some(REMISE_MONTANT.into());
+        n.remise_valeur = 2_500;
+        let id = create_note(&mut conn, &n).unwrap();
+        assert_eq!(notes::total(&conn, id).unwrap(), 7_500);
+
+        // Une remise supérieure au brut ne rend pas la facture négative.
+        let mut n2 = new_note(client, presta, 1);
+        n2.remise_type = Some(REMISE_MONTANT.into());
+        n2.remise_valeur = 99_000;
+        let id2 = create_note(&mut conn, &n2).unwrap();
+        assert_eq!(notes::total(&conn, id2).unwrap(), 0);
+    }
+
+    /// Arrondi au franc le plus proche : le XOF n'a pas de centime.
+    #[test]
+    fn remise_pourcent_arrondie_au_franc() {
+        let mut conn = open_in_memory().unwrap();
+        let client = clients::create(
+            &conn,
+            &NewClient {
+                nom: "Acme".into(),
+                email: None,
+                telephone: None,
+                adresse: None,
+            },
+        )
+        .unwrap();
+        let presta = prestations::create(
+            &conn,
+            &NewPrestation {
+                libelle: "Conseil".into(),
+                prix: 1_005,
+            },
+        )
+        .unwrap();
+        let mut n = new_note(client, presta, 1);
+        n.remise_type = Some(REMISE_POURCENT.into());
+        n.remise_valeur = 50; // 502,5 → 503
+        let id = create_note(&mut conn, &n).unwrap();
+        assert_eq!(notes::totaux(&conn, id).unwrap().1, 503);
+    }
+
+    #[test]
+    fn remise_invalide_est_rejetee() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+
+        let mut n = new_note(client, presta, 1);
+        n.remise_type = Some(REMISE_POURCENT.into());
+        n.remise_valeur = 120;
+        assert!(matches!(
+            create_note(&mut conn, &n),
+            Err(AppError::Validation(_))
+        ));
+
+        let mut n2 = new_note(client, presta, 1);
+        n2.remise_type = Some("cadeau".into());
+        assert!(matches!(
+            create_note(&mut conn, &n2),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    /// Une date malformée est refusée proprement, sans panique de découpage
+    /// (un caractère multi-octets empoisonnait le mutex global).
+    #[test]
+    fn date_non_ascii_est_rejetee_sans_paniquer() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let mut n = new_note(client, presta, 1);
+        n.date_emission = "1é2-06-18".into();
+        assert!(matches!(
+            create_note(&mut conn, &n),
             Err(AppError::Validation(_))
         ));
     }

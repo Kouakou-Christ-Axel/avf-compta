@@ -11,6 +11,8 @@ fn map_note(row: &Row) -> rusqlite::Result<NoteDeFrais> {
         statut: row.get("statut")?,
         echeance: row.get("echeance")?,
         cree_le: row.get("cree_le")?,
+        remise_type: row.get("remise_type")?,
+        remise_valeur: row.get("remise_valeur")?,
     })
 }
 
@@ -46,8 +48,7 @@ pub fn list_resume(conn: &Connection) -> AppResult<Vec<NoteResume>> {
     let mut stmt = conn.prepare(
         "SELECT n.id, n.client_id, c.nom AS client_nom, n.reference, n.date_emission,
                 n.statut, n.echeance,
-                COALESCE((SELECT SUM(prix_snapshot * quantite)
-                          FROM note_lignes l WHERE l.note_id = n.id), 0) AS total,
+                COALESCE((SELECT t.net FROM note_totaux t WHERE t.note_id = n.id), 0) AS total,
                 COALESCE((SELECT SUM(montant)
                           FROM paiements p WHERE p.note_id = n.id AND p.annule = 0), 0) AS paye
          FROM notes_de_frais n
@@ -79,26 +80,61 @@ pub fn lignes(conn: &Connection, note_id: i64) -> AppResult<Vec<NoteLigne>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-/// Total facturé d'une note (Σ prix_snapshot × quantité), en francs CFA.
+/// Total **net** facturé d'une note (lignes − remise), en francs CFA. C'est le
+/// montant qui fait foi partout : solde, statistiques, reçus.
 pub fn total(conn: &Connection, note_id: i64) -> AppResult<i64> {
-    let total: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(prix_snapshot * quantite), 0)
-         FROM note_lignes WHERE note_id = ?1",
+    Ok(totaux(conn, note_id)?.2)
+}
+
+/// Détail du calcul d'une note : `(brut, remise, net)` en francs CFA.
+/// Unique point d'entrée Rust vers la vue `note_totaux`.
+pub fn totaux(conn: &Connection, note_id: i64) -> AppResult<(i64, i64, i64)> {
+    let res = conn.query_row(
+        "SELECT brut, remise, net FROM note_totaux WHERE note_id = ?1",
         [note_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    );
+    match res {
+        Ok(v) => Ok(v),
+        // Une note sans ligne n'apparaît pas dans la vue : tout est à zéro.
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok((0, 0, 0)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Statut courant d'une note (`emise`, `payee`, `annulee`).
+pub fn statut(conn: &Connection, id: i64) -> AppResult<String> {
+    conn.query_row(
+        "SELECT statut FROM notes_de_frais WHERE id = ?1",
+        [id],
         |r| r.get(0),
-    )?;
-    Ok(total)
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("note {id}")),
+        other => other.into(),
+    })
+}
+
+/// Nombre de paiements encore valides (non annulés) rattachés à une note.
+pub fn nb_paiements_actifs(conn: &Connection, id: i64) -> AppResult<i64> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*) FROM paiements WHERE note_id = ?1 AND annule = 0",
+        [id],
+        |r| r.get(0),
+    )?)
 }
 
 pub fn detail(conn: &Connection, id: i64) -> AppResult<NoteDetail> {
     let note = get(conn, id)?;
     let lignes = lignes(conn, id)?;
-    let total = total(conn, id)?;
+    let (total_brut, remise, total) = totaux(conn, id)?;
     let depenses = super::depenses::list_by_note(conn, id)?;
     let depenses_total = super::depenses::total_by_note(conn, id)?;
     Ok(NoteDetail {
         note,
         lignes,
+        total_brut,
+        remise,
         total,
         depenses,
         depenses_total,
@@ -126,7 +162,21 @@ pub fn delete(conn: &Connection, id: i64) -> AppResult<()> {
 }
 
 /// Annule une note (statut « annulee ») ; elle est exclue des totaux/stats.
+///
+/// Refusé tant qu'un paiement valide y est rattaché : les totaux excluant les
+/// notes annulées, l'annulation ferait disparaître de l'argent réellement
+/// encaissé du tableau de bord et du solde client. Il faut d'abord annuler les
+/// paiements (ce qui trace le remboursement).
 pub fn annuler(conn: &Connection, id: i64) -> AppResult<()> {
+    if statut(conn, id)? == "annulee" {
+        return Ok(());
+    }
+    let actifs = nb_paiements_actifs(conn, id)?;
+    if actifs > 0 {
+        return Err(AppError::Validation(format!(
+            "annulation impossible : {actifs} paiement(s) sont encore enregistrés              sur cette facture. Annulez-les d'abord."
+        )));
+    }
     set_statut(conn, id, "annulee")
 }
 
@@ -170,6 +220,8 @@ mod tests {
                     prestation_id: presta,
                     quantite: 3,
                 }],
+                remise_type: None,
+                remise_valeur: 0,
             },
         )
         .unwrap();

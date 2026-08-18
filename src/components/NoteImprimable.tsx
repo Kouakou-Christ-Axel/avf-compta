@@ -22,6 +22,11 @@ export function NoteImprimable({
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal">
         <div className="recu-print">
+          {note.statut === "annulee" && (
+            <div className="filigrane-annule" aria-hidden="true">
+              ANNULÉE
+            </div>
+          )}
           <header className="recu-tete">
             <div className="recu-cabinet-bloc">
               {params?.logo && (
@@ -66,6 +71,23 @@ export function NoteImprimable({
               </div>
             ))}
           </section>
+
+          {detail.remise > 0 && (
+            <section className="recu-bloc">
+              <div className="recu-ligne">
+                <span>Sous-total</span>
+                <span>{formatMontant(detail.total_brut)}</span>
+              </div>
+              <div className="recu-ligne">
+                <span>
+                  Remise
+                  {note.remise_type === "pourcent" &&
+                    ` (${note.remise_valeur} %)`}
+                </span>
+                <span>−{formatMontant(detail.remise)}</span>
+              </div>
+            </section>
+          )}
 
           <section className="recu-montant">
             <span>Total</span>

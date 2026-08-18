@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  archiverPrestation,
   createPrestation,
   deletePrestation,
   listPrestations,
@@ -7,9 +8,11 @@ import {
 import { formatMontant, parseMontant } from "../api/money";
 import type { Prestation } from "../api/types";
 import { BarreRecherche } from "../components/BarreRecherche";
+import { useToast } from "../components/toast-context";
 import { correspond } from "../utils/recherche";
 
 export function PrestationsPage() {
+  const { showToast } = useToast();
   const [prestations, setPrestations] = useState<Prestation[]>([]);
   const [libelle, setLibelle] = useState("");
   const [prix, setPrix] = useState("");
@@ -42,16 +45,35 @@ export function PrestationsPage() {
       setLibelle("");
       setPrix("");
       await recharger();
+      showToast("Prestation ajoutée");
     } catch (err) {
       setErreur(String(err));
     }
   }
 
-  async function supprimer(id: number) {
+  async function supprimer(p: Prestation) {
+    if (!confirm(`Supprimer définitivement « ${p.libelle} » ?`)) return;
     setErreur(null);
     try {
-      await deletePrestation(id);
+      await deletePrestation(p.id);
       await recharger();
+      showToast("Prestation supprimée");
+    } catch (err) {
+      setErreur(String(err));
+    }
+  }
+
+  /**
+   * Archiver retire la prestation des nouvelles factures sans toucher aux
+   * factures passées (leur libellé et leur prix y sont figés). C'est la voie à
+   * suivre pour une prestation déjà facturée, que la suppression refuse.
+   */
+  async function basculerArchive(p: Prestation) {
+    setErreur(null);
+    try {
+      await archiverPrestation(p.id, !p.actif);
+      await recharger();
+      showToast(p.actif ? "Prestation archivée" : "Prestation réactivée");
     } catch (err) {
       setErreur(String(err));
     }
@@ -116,14 +138,19 @@ export function PrestationsPage() {
           </thead>
           <tbody>
             {prestationsFiltrees.map((p) => (
-              <tr key={p.id}>
-                <td className="cell-fort">{p.libelle}</td>
+              <tr key={p.id} className={p.actif ? undefined : "ligne-archivee"}>
+                <td className="cell-fort">
+                  {p.libelle}
+                  {!p.actif && (
+                    <span className="badge badge-archive">Archivée</span>
+                  )}
+                </td>
                 <td className="col-montant">{formatMontant(p.prix)}</td>
                 <td className="cell-actions">
-                  <button
-                    className="btn-danger"
-                    onClick={() => supprimer(p.id)}
-                  >
+                  <button onClick={() => basculerArchive(p)}>
+                    {p.actif ? "Archiver" : "Réactiver"}
+                  </button>
+                  <button className="btn-danger" onClick={() => supprimer(p)}>
                     Supprimer
                   </button>
                 </td>

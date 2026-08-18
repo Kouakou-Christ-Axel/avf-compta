@@ -11,6 +11,12 @@ pub struct NoteDeFrais {
     pub statut: String,
     pub echeance: Option<String>,
     pub cree_le: String,
+    /// `None`, `"montant"` (remise en francs) ou `"pourcent"`.
+    pub remise_type: Option<String>,
+    /// Valeur brute saisie : des francs ou des points de pourcentage selon
+    /// `remise_type`. Le montant réellement déduit est calculé par la vue
+    /// SQL `note_totaux`, qui le borne à [0, brut].
+    pub remise_valeur: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -31,6 +37,11 @@ pub struct NoteLigne {
 pub struct NoteDetail {
     pub note: NoteDeFrais,
     pub lignes: Vec<NoteLigne>,
+    /// Total des lignes avant remise.
+    pub total_brut: i64,
+    /// Montant de la remise effectivement déduite.
+    pub remise: i64,
+    /// Total net facturé (brut − remise) : c'est lui qui fait foi partout.
     pub total: i64,
     pub depenses: Vec<Depense>,
     pub depenses_total: i64,
@@ -66,4 +77,8 @@ pub struct NewNote {
     pub date_emission: String,
     pub echeance: Option<String>,
     pub lignes: Vec<NewNoteLigne>,
+    #[serde(default)]
+    pub remise_type: Option<String>,
+    #[serde(default)]
+    pub remise_valeur: i64,
 }

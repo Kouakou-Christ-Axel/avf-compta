@@ -33,21 +33,54 @@ impl Money {
         self.0 < 0
     }
 
-    /// Convertit une saisie utilisateur (« 150 000 », « 150000 ») en francs.
-    /// Les espaces (groupage) sont ignorés ; les décimales ne sont pas
-    /// acceptées car le franc CFA n'a pas de sous-unité.
+    /// Convertit une saisie utilisateur en francs CFA.
+    ///
+    /// Accepte les séparateurs de milliers usuels — espace, point ou virgule —
+    /// à condition qu'ils délimitent des groupes de trois chiffres :
+    /// « 150 000 », « 150.000 », « 1,250,000 », « 150000 ». Les décimales
+    /// restent refusées (« 5,50 ») car le franc CFA n'a pas de sous-unité.
     pub fn parse(input: &str) -> Result<Money, String> {
         let cleaned: String = input.chars().filter(|c| !c.is_whitespace()).collect();
         let invalid = || format!("montant invalide: {input}");
 
         let neg = cleaned.starts_with('-');
-        let body = cleaned.trim_start_matches(['-', '+']);
-        if body.is_empty() || !body.chars().all(|c| c.is_ascii_digit()) {
-            return Err(invalid());
-        }
-        let value: i64 = body.parse().map_err(|_| invalid())?;
+        let body = cleaned.strip_prefix(['-', '+']).unwrap_or(&cleaned);
+        let chiffres = chiffres_seuls(body).ok_or_else(invalid)?;
+        let value: i64 = chiffres.parse().map_err(|_| invalid())?;
         Ok(Money(if neg { -value } else { value }))
     }
+}
+
+/// Retire les séparateurs de milliers d'une saisie et renvoie les chiffres
+/// seuls, ou `None` si la forme n'est pas celle d'un entier groupé par trois.
+fn chiffres_seuls(body: &str) -> Option<String> {
+    if body.is_empty() {
+        return None;
+    }
+    if body.chars().all(|c| c.is_ascii_digit()) {
+        return Some(body.to_string());
+    }
+    // Un seul type de séparateur, des groupes de trois chiffres après le
+    // premier : « 1.250.000 » passe, « 5,50 » et « 1.2345 » sont refusés.
+    let sep = body.chars().find(|c| *c == '.' || *c == ',')?;
+    if body.chars().any(|c| (c == '.' || c == ',') && c != sep) {
+        return None;
+    }
+    let mut groupes = body.split(sep);
+    let tete = groupes.next()?;
+    if tete.is_empty() || tete.len() > 3 || !tete.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let mut chiffres = tete.to_string();
+    let mut au_moins_un = false;
+    for g in groupes {
+        if g.len() != 3 || !g.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        chiffres.push_str(g);
+        au_moins_un = true;
+    }
+    au_moins_un.then_some(chiffres)
 }
 
 impl fmt::Display for Money {
@@ -119,6 +152,13 @@ mod tests {
         assert_eq!(Money::parse("150 000").unwrap().xof(), 150_000);
         assert_eq!(Money::parse("150000").unwrap().xof(), 150_000);
         assert_eq!(Money::parse("500").unwrap().xof(), 500);
+        // Séparateurs de milliers usuels : « 5.000 » et « 5,000 » sont des
+        // saisies courantes qui étaient rejetées sans aucun montant enregistré.
+        assert_eq!(Money::parse("5.000").unwrap().xof(), 5_000);
+        assert_eq!(Money::parse("5,000").unwrap().xof(), 5_000);
+        assert_eq!(Money::parse("1.250.000").unwrap().xof(), 1_250_000);
+        assert_eq!(Money::parse("1,250,000").unwrap().xof(), 1_250_000);
+        assert_eq!(Money::parse("-2.500").unwrap().xof(), -2_500);
     }
 
     #[test]
@@ -127,5 +167,11 @@ mod tests {
         assert!(Money::parse("abc").is_err());
         assert!(Money::parse("1,50").is_err());
         assert!(Money::parse("1.5").is_err());
+        // Décimales et groupes mal formés restent refusés.
+        assert!(Money::parse("5,50").is_err());
+        assert!(Money::parse("1.2345").is_err());
+        assert!(Money::parse("1.250,000").is_err());
+        assert!(Money::parse(".500").is_err());
+        assert!(Money::parse("1234.567").is_err());
     }
 }

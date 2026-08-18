@@ -22,6 +22,11 @@ pub fn create(conn: &Connection, d: &NewDepense) -> AppResult<i64> {
             "le montant de la dépense doit être positif".into(),
         ));
     }
+    if super::notes::statut(conn, d.note_id)? == "annulee" {
+        return Err(AppError::Validation(
+            "cette facture est annulée : aucune dépense ne peut y être ajoutée".into(),
+        ));
+    }
     conn.execute(
         "INSERT INTO depenses (note_id, libelle, montant, date_depense, cree_le)
          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -67,7 +72,7 @@ pub fn list_all(conn: &Connection) -> AppResult<Vec<DepenseLigne>> {
                 d.libelle, d.montant, d.date_depense
          FROM depenses d
          JOIN notes_de_frais n ON n.id = d.note_id
-         ORDER BY d.date_depense, d.id",
+         ORDER BY d.date_depense DESC, d.id DESC",
     )?;
     let rows = stmt.query_map([], |row| {
         Ok(DepenseLigne {
@@ -120,6 +125,8 @@ mod tests {
                     prestation_id: presta,
                     quantite: 1,
                 }],
+                remise_type: None,
+                remise_valeur: 0,
             },
         )
         .unwrap()
