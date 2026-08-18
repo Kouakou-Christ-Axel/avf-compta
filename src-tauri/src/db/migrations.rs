@@ -230,6 +230,20 @@ pub fn migrations() -> Migrations<'static> {
         WHERE NOT EXISTS (SELECT 1 FROM modes_paiement);
         "#,
         ),
+        // v14 : index de lecture manquants. Toutes les listes de l'application
+        // reposent sur des sous-requêtes corrélées (total facturé par note,
+        // cumuls par client, séries mensuelles) qui balayaient les tables
+        // entières faute d'index.
+        M::up(
+            r#"
+        CREATE INDEX idx_notes_client   ON notes_de_frais(client_id);
+        CREATE INDEX idx_notes_date     ON notes_de_frais(date_emission);
+        CREATE INDEX idx_notes_ref      ON notes_de_frais(reference);
+        CREATE INDEX idx_lignes_presta  ON note_lignes(prestation_id);
+        CREATE INDEX idx_paiements_date ON paiements(date_paiement);
+        CREATE INDEX idx_depenses_date  ON depenses(date_depense);
+        "#,
+        ),
     ])
 }
 

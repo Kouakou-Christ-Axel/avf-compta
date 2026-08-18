@@ -63,7 +63,6 @@ export const createNote = (note: NewNote) =>
   invoke<number>("create_note", { note });
 export const updateNote = (id: number, note: NewNote) =>
   invoke<void>("update_note", { id, note });
-export const deleteNote = (id: number) => invoke<void>("delete_note", { id });
 export const annulerNote = (id: number) => invoke<void>("annuler_note", { id });
 
 // --- Paiements ---

@@ -101,7 +101,11 @@ pub fn prochain_numero(conn: &Connection) -> AppResult<String> {
 }
 
 pub fn get(conn: &Connection, id: i64) -> AppResult<Recu> {
-    Ok(conn.query_row("SELECT * FROM recus WHERE id = ?1", [id], map_row)?)
+    conn.query_row("SELECT * FROM recus WHERE id = ?1", [id], map_row)
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("reçu {id}")),
+            other => other.into(),
+        })
 }
 
 pub fn list(conn: &Connection) -> AppResult<Vec<Recu>> {
@@ -197,7 +201,7 @@ mod tests {
         )
         .unwrap();
         let paiement = paiements_service::enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 50_000,
@@ -258,7 +262,7 @@ mod tests {
         )
         .unwrap();
         let paiement = paiements_service::enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: note,
                 montant: 50_000,

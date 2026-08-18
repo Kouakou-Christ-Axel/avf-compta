@@ -38,6 +38,33 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 - La dernière dépense saisie apparaît en tête de liste, et une confirmation est
   demandée avant suppression.
 
+### Corrigé (lot 3 : dette technique)
+
+- **Numérotation des factures et des reçus dérivée du dernier numéro attribué**
+  et non plus d'un décompte : un trou dans la série faisait reculer la séquence
+  et deux documents pouvaient porter la même référence.
+- **Suppression définitive d'une facture retirée.** La commande existait, sans
+  garde-fou, et effaçait en cascade les lignes et les dépenses associées.
+  L'annulation reste la voie normale : elle conserve la pièce.
+- **Enregistrement d'un paiement transactionnel** : séparées, l'insertion et la
+  mise à jour du statut pouvaient laisser un encaissement sur une facture
+  restée « émise ».
+- **Enregistrement des paramètres fiable** même si la ligne de profil manque
+  (base ancienne restaurée) : c'était un échec silencieux, avec un message de
+  succès.
+- **Montant trop élevé refusé à la saisie.** Un total qui dépasse les limites
+  de calcul basculait silencieusement en flottant côté base et provoquait plus
+  tard une erreur incompréhensible.
+- **Messages « introuvable » nommant la pièce** (paiement, reçu) au lieu de
+  « aucune ligne ».
+- **Index de lecture ajoutés** sur les colonnes utilisées par les listes et les
+  cumuls, qui balayaient les tables entières.
+- **Vérification des mises à jour au démarrage** avec un bandeau discret : elle
+  n'existait qu'enfouie dans les Paramètres, et les utilisateurs restaient sur
+  une version ancienne sans le savoir.
+- Retrait de l'export PDF interne (inaccessible depuis l'interface depuis le
+  passage à l'impression) et de la dépendance `pdfmake` qu'il portait.
+
 ### Ajouté (lot 2 : ergonomie et correction de saisie)
 
 - **Modification d'un client, d'une prestation et d'une facture.** Une erreur

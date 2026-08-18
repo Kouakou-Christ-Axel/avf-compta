@@ -19,68 +19,21 @@ impl Money {
         self.0
     }
 
-    /// Multiplie le montant par une quantité (lignes de note de frais).
-    pub fn mul_qty(self, qty: i64) -> Self {
-        Money(self.0 * qty)
+    /// Multiplie le montant par une quantité (lignes de note de frais),
+    /// en signalant le débordement plutôt qu'en le laissant passer.
+    ///
+    /// La multiplication est précisément l'endroit où un total de ligne peut
+    /// déborder ; en SQLite le dépassement ne lève pas d'erreur mais bascule
+    /// silencieusement en flottant, ce que la lecture en `i64` refuse ensuite
+    /// avec un message incompréhensible.
+    pub fn checked_mul_qty(self, qty: i64) -> Option<Money> {
+        self.0.checked_mul(qty).map(Money)
     }
 
     /// Addition protégée contre le débordement.
     pub fn checked_add(self, other: Money) -> Option<Money> {
         self.0.checked_add(other.0).map(Money)
     }
-
-    pub fn is_negative(self) -> bool {
-        self.0 < 0
-    }
-
-    /// Convertit une saisie utilisateur en francs CFA.
-    ///
-    /// Accepte les séparateurs de milliers usuels — espace, point ou virgule —
-    /// à condition qu'ils délimitent des groupes de trois chiffres :
-    /// « 150 000 », « 150.000 », « 1,250,000 », « 150000 ». Les décimales
-    /// restent refusées (« 5,50 ») car le franc CFA n'a pas de sous-unité.
-    pub fn parse(input: &str) -> Result<Money, String> {
-        let cleaned: String = input.chars().filter(|c| !c.is_whitespace()).collect();
-        let invalid = || format!("montant invalide: {input}");
-
-        let neg = cleaned.starts_with('-');
-        let body = cleaned.strip_prefix(['-', '+']).unwrap_or(&cleaned);
-        let chiffres = chiffres_seuls(body).ok_or_else(invalid)?;
-        let value: i64 = chiffres.parse().map_err(|_| invalid())?;
-        Ok(Money(if neg { -value } else { value }))
-    }
-}
-
-/// Retire les séparateurs de milliers d'une saisie et renvoie les chiffres
-/// seuls, ou `None` si la forme n'est pas celle d'un entier groupé par trois.
-fn chiffres_seuls(body: &str) -> Option<String> {
-    if body.is_empty() {
-        return None;
-    }
-    if body.chars().all(|c| c.is_ascii_digit()) {
-        return Some(body.to_string());
-    }
-    // Un seul type de séparateur, des groupes de trois chiffres après le
-    // premier : « 1.250.000 » passe, « 5,50 » et « 1.2345 » sont refusés.
-    let sep = body.chars().find(|c| *c == '.' || *c == ',')?;
-    if body.chars().any(|c| (c == '.' || c == ',') && c != sep) {
-        return None;
-    }
-    let mut groupes = body.split(sep);
-    let tete = groupes.next()?;
-    if tete.is_empty() || tete.len() > 3 || !tete.chars().all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    let mut chiffres = tete.to_string();
-    let mut au_moins_un = false;
-    for g in groupes {
-        if g.len() != 3 || !g.chars().all(|c| c.is_ascii_digit()) {
-            return None;
-        }
-        chiffres.push_str(g);
-        au_moins_un = true;
-    }
-    au_moins_un.then_some(chiffres)
 }
 
 impl fmt::Display for Money {
@@ -131,8 +84,13 @@ mod tests {
 
     #[test]
     fn mul_qty_multiplies() {
-        assert_eq!(Money::from_xof(2_500).mul_qty(3).xof(), 7_500);
-        assert_eq!(Money::from_xof(2_500).mul_qty(0).xof(), 0);
+        assert_eq!(
+            Money::from_xof(2_500).checked_mul_qty(3).unwrap().xof(),
+            7_500
+        );
+        assert_eq!(Money::from_xof(2_500).checked_mul_qty(0).unwrap().xof(), 0);
+        // Le débordement est signalé, pas silencieusement enroulé.
+        assert!(Money::from_xof(i64::MAX).checked_mul_qty(2).is_none());
     }
 
     #[test]
@@ -145,33 +103,5 @@ mod tests {
             Money::from_xof(i64::MAX).checked_add(Money::from_xof(1)),
             None
         );
-    }
-
-    #[test]
-    fn parse_accepts_grouped_and_plain_input() {
-        assert_eq!(Money::parse("150 000").unwrap().xof(), 150_000);
-        assert_eq!(Money::parse("150000").unwrap().xof(), 150_000);
-        assert_eq!(Money::parse("500").unwrap().xof(), 500);
-        // Séparateurs de milliers usuels : « 5.000 » et « 5,000 » sont des
-        // saisies courantes qui étaient rejetées sans aucun montant enregistré.
-        assert_eq!(Money::parse("5.000").unwrap().xof(), 5_000);
-        assert_eq!(Money::parse("5,000").unwrap().xof(), 5_000);
-        assert_eq!(Money::parse("1.250.000").unwrap().xof(), 1_250_000);
-        assert_eq!(Money::parse("1,250,000").unwrap().xof(), 1_250_000);
-        assert_eq!(Money::parse("-2.500").unwrap().xof(), -2_500);
-    }
-
-    #[test]
-    fn parse_rejects_decimals_and_invalid() {
-        assert!(Money::parse("").is_err());
-        assert!(Money::parse("abc").is_err());
-        assert!(Money::parse("1,50").is_err());
-        assert!(Money::parse("1.5").is_err());
-        // Décimales et groupes mal formés restent refusés.
-        assert!(Money::parse("5,50").is_err());
-        assert!(Money::parse("1.2345").is_err());
-        assert!(Money::parse("1.250,000").is_err());
-        assert!(Money::parse(".500").is_err());
-        assert!(Money::parse("1234.567").is_err());
     }
 }

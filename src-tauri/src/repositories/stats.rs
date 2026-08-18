@@ -175,7 +175,7 @@ mod tests {
         let mai = facture("2026-05-10");
         facture("2026-06-10");
         paiements_service::enregistrer(
-            &conn,
+            &mut conn,
             &NewPaiement {
                 note_id: mai,
                 montant: 4_000,
