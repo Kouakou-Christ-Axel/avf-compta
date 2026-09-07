@@ -20,6 +20,7 @@ export function RecusPage() {
   const [apercu, setApercu] = useState<RecuDetail | null>(null);
   const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+  const [chargement, setChargement] = useState(true);
 
   const recusFiltres = useMemo(
     () =>
@@ -39,7 +40,8 @@ export function RecusPage() {
         setRecus(r);
         setParams(p);
       })
-      .catch((e) => setErreur(String(e)));
+      .catch((e) => setErreur(String(e)))
+      .finally(() => setChargement(false));
   }, []);
 
   async function ouvrir(id: number) {
@@ -134,9 +136,11 @@ export function RecusPage() {
             {recusFiltres.length === 0 && (
               <tr>
                 <td colSpan={5} className="vide">
-                  {recus.length === 0
-                    ? "Aucun reçu pour le moment."
-                    : "Aucun reçu ne correspond à la recherche."}
+                  {chargement
+                    ? "Chargement…"
+                    : recus.length === 0
+                      ? "Aucun reçu pour le moment."
+                      : "Aucun reçu ne correspond à la recherche."}
                 </td>
               </tr>
             )}

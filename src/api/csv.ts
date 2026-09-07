@@ -7,10 +7,47 @@ const BOM = "\uFEFF";
 
 function echappe(valeur: string): string {
   const v = valeur ?? "";
-  if (v.includes(SEP) || v.includes('"') || v.includes("\n")) {
+  if (
+    v.includes(SEP) ||
+    v.includes('"') ||
+    v.includes("\n") ||
+    v.includes("\r")
+  ) {
     return `"${v.replace(/"/g, '""')}"`;
   }
   return v;
+}
+
+/**
+ * Sépare les colonnes sur la ligne d'en-tête plutôt que sur la présence d'un
+ * `;` n'importe où dans le fichier : une seule adresse contenant un
+ * point-virgule (« Cocody; Angré ») faisait basculer tout un CSV en virgules,
+ * et l'import décalait silencieusement les colonnes.
+ *
+ * Les séparateurs situés à l'intérieur de guillemets ne comptent pas.
+ */
+function detecterSeparateur(texte: string): string {
+  const finLigne = texte.search(/\r?\n/);
+  const entete = finLigne === -1 ? texte : texte.slice(0, finLigne);
+
+  const compte = (sep: string): number => {
+    let n = 0;
+    let dansGuillemets = false;
+    for (let i = 0; i < entete.length; i++) {
+      const c = entete[i];
+      if (c === '"') {
+        if (dansGuillemets && entete[i + 1] === '"') i++;
+        else dansGuillemets = !dansGuillemets;
+      } else if (c === sep && !dansGuillemets) {
+        n++;
+      }
+    }
+    return n;
+  };
+
+  // À égalité (y compris zéro colonne supplémentaire), le point-virgule
+  // l'emporte : c'est le format que l'application produit elle-même.
+  return compte(";") >= compte(",") ? ";" : ",";
 }
 
 /** Construit un CSV (UTF-8 BOM pour Excel) depuis des en-têtes et des lignes. */
@@ -24,7 +61,7 @@ export function toCsv(headers: string[], rows: string[][]): string {
 /** Analyse un CSV simple (séparateur `;` ou `,`, guillemets gérés). */
 export function parseCsv(texte: string): string[][] {
   const sansBom = texte.startsWith(BOM) ? texte.slice(1) : texte;
-  const sep = sansBom.includes(";") ? ";" : ",";
+  const sep = detecterSeparateur(sansBom);
   const lignes: string[][] = [];
   let champ = "";
   let ligne: string[] = [];

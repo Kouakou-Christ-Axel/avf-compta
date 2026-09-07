@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   annulerNote,
   annulerPaiement,
@@ -14,6 +14,7 @@ import {
   listModesPaiement,
   listNotesResume,
   listPaiements,
+  listPrestations,
   listPrestationsActives,
   soldeNote,
   updateNote,
@@ -42,6 +43,15 @@ import { correspond } from "../utils/recherche";
 function aujourdhui(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * Un seul rappel des factures en retard par lancement de l'application.
+ *
+ * Hors du composant volontairement : `App` démonte la page à chaque changement
+ * d'onglet, donc un état interne repartait à zéro et la notification système
+ * était renvoyée à chaque retour sur « Factures ».
+ */
+let rappelRetardEnvoye = false;
 
 /**
  * Montant de remise appliqué, miroir de la vue SQL `note_totaux` : arrondi au
@@ -109,7 +119,13 @@ export function NotesPage() {
   const { showToast } = useToast();
   const [notes, setNotes] = useState<NoteResume[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  // Toutes les prestations, archivées comprises : une facture existante peut
+  // porter une prestation archivée depuis, et il faut pouvoir afficher son
+  // libellé et son prix. Seules les actives sont proposées à l'ajout.
   const [prestations, setPrestations] = useState<Prestation[]>([]);
+  const [prestationsActives, setPrestationsActives] = useState<Prestation[]>(
+    [],
+  );
   const [params, setParams] = useState<Parametres | null>(null);
   const [modes, setModes] = useState<ModePaiement[]>([]);
   const [selection, setSelection] = useState<number | null>(null);
@@ -134,8 +150,6 @@ export function NotesPage() {
   // Facture en cours de modification (null = formulaire de création).
   const [editionId, setEditionId] = useState<number | null>(null);
 
-  const rappelEnvoye = useRef(false);
-
   async function rechargerNotes() {
     setNotes(await listNotesResume());
   }
@@ -144,19 +158,21 @@ export function NotesPage() {
     Promise.all([
       listNotesResume(),
       listClients(),
+      listPrestations(),
       listPrestationsActives(),
       getParametres(),
       listModesPaiement(),
     ])
-      .then(([n, c, p, par, m]) => {
+      .then(([n, c, p, pa, par, m]) => {
         setNotes(n);
         setClients(c);
         setPrestations(p);
+        setPrestationsActives(pa);
         setParams(par);
         setModes(m);
         const nbRetard = n.filter(estEnRetard).length;
-        if (nbRetard > 0 && !rappelEnvoye.current) {
-          rappelEnvoye.current = true;
+        if (nbRetard > 0 && !rappelRetardEnvoye) {
+          rappelRetardEnvoye = true;
           notifierRetards(nbRetard);
         }
       })
@@ -458,7 +474,7 @@ export function NotesPage() {
 
         <p className="aide">Cliquez sur une prestation pour l'ajouter :</p>
         <div className="puces">
-          {prestations.map((p) => (
+          {prestationsActives.map((p) => (
             <button
               type="button"
               key={p.id}
@@ -469,7 +485,7 @@ export function NotesPage() {
               <span className="puce-prix">{formatMontant(p.prix)}</span>
             </button>
           ))}
-          {prestations.length === 0 && (
+          {prestationsActives.length === 0 && (
             <span className="aide">Aucune prestation : créez-en d'abord.</span>
           )}
         </div>
@@ -887,6 +903,7 @@ function DetailNote({
           <form className="paiement-form" onSubmit={payer}>
             <input
               inputMode="numeric"
+              aria-label="Montant du paiement (FCFA)"
               placeholder="Montant (FCFA)"
               value={montant}
               onChange={(e) => setMontant(e.target.value)}
@@ -898,6 +915,7 @@ function DetailNote({
               onChange={(e) => setDatePaiement(e.target.value)}
             />
             <select
+              aria-label="Mode de paiement"
               value={methode}
               onChange={(e) => setMethode(e.target.value)}
             >
@@ -1011,12 +1029,14 @@ function DetailNote({
 
         <form className="depenses-form" onSubmit={ajouterDepense}>
           <input
+            aria-label="Libellé de la dépense"
             placeholder="Libellé"
             value={depLibelle}
             onChange={(e) => setDepLibelle(e.target.value)}
           />
           <input
             inputMode="numeric"
+            aria-label="Montant de la dépense (FCFA)"
             placeholder="Montant (FCFA)"
             value={depMontant}
             onChange={(e) => setDepMontant(e.target.value)}
