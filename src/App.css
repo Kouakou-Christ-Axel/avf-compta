@@ -908,6 +908,25 @@ button:hover {
     visibility: visible;
   }
 
+  /* La modale passe en position statique ci-dessous, donc elle atterrit dans
+     le flux normal de .app/.content, après le contenu de page (formulaire,
+     tableau) qui reste en hauteur réelle même invisible. Sans neutraliser
+     aussi leur hauteur figée (100vh) et leur `overflow: hidden`/`auto`, ce
+     contenu repousse le reçu/la facture hors de la zone visible et
+     l'impression sortait entièrement vide. */
+  .app {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .content {
+    overflow: visible;
+    padding: 0;
+  }
+  .sidebar {
+    display: none;
+  }
+
   /* Le document imprimé vit dans une fenêtre modale : sans neutraliser le
      positionnement fixe, la hauteur maximale et le défilement de celle-ci, le
      navigateur n'imprime que ce qui tenait à l'écran — une facture longue
