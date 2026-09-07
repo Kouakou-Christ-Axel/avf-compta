@@ -900,30 +900,14 @@ button:hover {
 /* ---------- Print ---------- */
 
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  .recu-print,
-  .recu-print * {
-    visibility: visible;
-  }
-
-  /* La modale passe en position statique ci-dessous, donc elle atterrit dans
-     le flux normal de .app/.content, après le contenu de page (formulaire,
-     tableau) qui reste en hauteur réelle même invisible. Sans neutraliser
-     aussi leur hauteur figée (100vh) et leur `overflow: hidden`/`auto`, ce
-     contenu repousse le reçu/la facture hors de la zone visible et
-     l'impression sortait entièrement vide. */
-  .app {
-    display: block;
-    height: auto;
-    overflow: visible;
-  }
-  .content {
-    overflow: visible;
-    padding: 0;
-  }
-  .sidebar {
+  /* NoteImprimable/RecuImprimable sont rendus via un portail sous <body>, en
+     dehors de #root : masquer #root en bloc suffit à écarter tout le reste
+     de l'appli sans laisser d'espace résiduel. La technique classique
+     « body * { visibility: hidden } » a été abandonnée : elle masque le
+     contenu mais conserve la place qu'il occupe dans le flux, ce qui
+     repoussait le document imprimé loin après la première page — une
+     impression qui semblait vide. */
+  #root {
     display: none;
   }
 

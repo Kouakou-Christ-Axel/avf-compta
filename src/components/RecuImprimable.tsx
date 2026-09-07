@@ -1,7 +1,15 @@
+import { createPortal } from "react-dom";
 import { formatMontant } from "../api/money";
 import type { Parametres, RecuDetail } from "../api/types";
 
-/** Aperçu d'un reçu, imprimable (window.print → choix du format/PDF). */
+/**
+ * Aperçu d'un reçu, imprimable (window.print → choix du format/PDF).
+ *
+ * Rendu via un portail directement sous `<body>`, en dehors de `#root` : à
+ * l'impression, `#root` est masqué en bloc (`display: none`) et seul ce
+ * portail reste dans le flux. Voir `NoteImprimable` pour le détail du bug
+ * (impression vide) que cette approche évite.
+ */
 export function RecuImprimable({
   recu,
   params,
@@ -13,7 +21,7 @@ export function RecuImprimable({
 }) {
   const cabinet = params?.cabinet_nom || "avf-compta";
 
-  return (
+  return createPortal(
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal">
         <div className="recu-print">
@@ -113,6 +121,7 @@ export function RecuImprimable({
           <button onClick={onClose}>Fermer</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
