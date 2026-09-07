@@ -250,11 +250,13 @@ describe("NotesPage — modification", () => {
       await screen.findByRole("button", { name: "Modifier" }),
     );
 
-    const formulaire = screen
-      .getByRole("button", { name: "Enregistrer les modifications" })
-      .closest("form") as HTMLElement;
+    const formulaire = (
+      await screen.findByRole("button", {
+        name: "Enregistrer les modifications",
+      })
+    ).closest("form") as HTMLElement;
     // Le libellé et le montant de la ligne restent lisibles…
-    const ligne = within(formulaire).getByRole("listitem");
+    const ligne = await within(formulaire).findByRole("listitem");
     expect(within(ligne).getByText("Bilan annuel")).toBeInTheDocument();
     expect(within(ligne).getByText(/30\s000/)).toBeInTheDocument();
     // …mais la prestation archivée n'est pas proposée à l'ajout.

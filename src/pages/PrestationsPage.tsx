@@ -10,6 +10,7 @@ import { formatMontant, parseMontant } from "../api/money";
 import type { Prestation } from "../api/types";
 import { BarreRecherche } from "../components/BarreRecherche";
 import { useToast } from "../components/toast-context";
+import { useActionPage } from "../hooks/useActionPage";
 import { correspond } from "../utils/recherche";
 
 export function PrestationsPage() {
@@ -19,6 +20,7 @@ export function PrestationsPage() {
   const [prix, setPrix] = useState("");
   const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+  const executer = useActionPage(setErreur);
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
   // Prestation en cours de modification (null = formulaire d'ajout).
@@ -88,34 +90,32 @@ export function PrestationsPage() {
     setPrix(String(p.prix));
   }
 
-  async function supprimer(p: Prestation) {
-    if (!confirm(`Supprimer définitivement « ${p.libelle} » ?`)) return;
-    setErreur(null);
-    try {
-      await deletePrestation(p.id);
-      if (edition?.id === p.id) reinitialiser();
-      await recharger();
-      showToast("Prestation supprimée");
-    } catch (err) {
-      setErreur(String(err));
-    }
-  }
+  const supprimer = (p: Prestation) =>
+    executer(
+      async () => {
+        await deletePrestation(p.id);
+        if (edition?.id === p.id) reinitialiser();
+        await recharger();
+      },
+      {
+        confirmation: `Supprimer définitivement « ${p.libelle} » ?`,
+        succes: "Prestation supprimée",
+      },
+    );
 
   /**
    * Archiver retire la prestation des nouvelles factures sans toucher aux
    * factures passées (leur libellé et leur prix y sont figés). C'est la voie à
    * suivre pour une prestation déjà facturée, que la suppression refuse.
    */
-  async function basculerArchive(p: Prestation) {
-    setErreur(null);
-    try {
-      await archiverPrestation(p.id, !p.actif);
-      await recharger();
-      showToast(p.actif ? "Prestation archivée" : "Prestation réactivée");
-    } catch (err) {
-      setErreur(String(err));
-    }
-  }
+  const basculerArchive = (p: Prestation) =>
+    executer(
+      async () => {
+        await archiverPrestation(p.id, !p.actif);
+        await recharger();
+      },
+      { succes: p.actif ? "Prestation archivée" : "Prestation réactivée" },
+    );
 
   return (
     <section className="page">
