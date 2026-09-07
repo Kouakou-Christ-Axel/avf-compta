@@ -1,7 +1,17 @@
+import { createPortal } from "react-dom";
 import { formatMontant } from "../api/money";
 import type { NoteDetail, Parametres, SoldeNote } from "../api/types";
 
-/** Aperçu imprimable d'une note de frais (window.print → choix format/PDF). */
+/**
+ * Aperçu imprimable d'une note de frais (window.print → choix format/PDF).
+ *
+ * Rendu via un portail directement sous `<body>`, en dehors de `#root` : à
+ * l'impression, `#root` est masqué en bloc (`display: none`) et seul ce
+ * portail reste dans le flux. Nichée dans `#root`, la modale aurait hérité
+ * de la place occupée par le reste de la page (masqué en `visibility:
+ * hidden`, qui conserve l'espace) et se serait retrouvée repoussée bien
+ * après la première page imprimée — une impression qui semblait vide.
+ */
 export function NoteImprimable({
   detail,
   clientNom,
@@ -18,7 +28,7 @@ export function NoteImprimable({
   const cabinet = params?.cabinet_nom || "avf-compta";
   const note = detail.note;
 
-  return (
+  return createPortal(
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal">
         <div className="recu-print">
@@ -122,6 +132,7 @@ export function NoteImprimable({
           <button onClick={onClose}>Fermer</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
