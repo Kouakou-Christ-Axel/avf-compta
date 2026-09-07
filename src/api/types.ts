@@ -33,12 +33,19 @@ export interface NewPrestation {
 /** Remise globale d'une facture : montant fixe en francs, ou pourcentage. */
 export type RemiseType = "montant" | "pourcent";
 
+/**
+ * Statut d'une facture, tel que stocké en base et sérialisé par le backend
+ * (`StatutNote` côté Rust). Purement déclaratif : le JSON reste une chaîne,
+ * mais le compilateur refuse désormais une comparaison mal orthographiée.
+ */
+export type StatutNote = "emise" | "payee" | "annulee";
+
 export interface NoteDeFrais {
   id: number;
   client_id: number;
   reference: string | null;
   date_emission: string;
-  statut: string;
+  statut: StatutNote;
   echeance: string | null;
   cree_le: string;
   remise_type: RemiseType | null;
@@ -74,7 +81,7 @@ export interface NoteResume {
   client_nom: string;
   reference: string | null;
   date_emission: string;
-  statut: string;
+  statut: StatutNote;
   echeance: string | null;
   total: number;
   paye: number;

@@ -1,12 +1,8 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{NewPaiement, SoldeNote};
+use crate::models::{NewPaiement, SoldeNote, StatutNote};
 use crate::money::Money;
 use crate::repositories::{notes, paiements};
 use rusqlite::Connection;
-
-pub const STATUT_PAYEE: &str = "payee";
-pub const STATUT_EMISE: &str = "emise";
-pub const STATUT_ANNULEE: &str = "annulee";
 
 /// Calcule le solde d'une note : total facturé (remise déduite), encaissé et
 /// reste dû.
@@ -36,13 +32,13 @@ pub fn solde(conn: &Connection, note_id: i64) -> AppResult<SoldeNote> {
 /// Point d'entrée unique : toute écriture de statut liée à un paiement passe
 /// par ici, pour qu'aucun appelant ne puisse forcer un statut incohérent.
 pub fn recalculer_statut(conn: &Connection, note_id: i64) -> AppResult<()> {
-    if notes::statut(conn, note_id)? == STATUT_ANNULEE {
+    if notes::statut(conn, note_id)? == StatutNote::ANNULEE {
         return Ok(());
     }
     let statut = if solde(conn, note_id)?.payee {
-        STATUT_PAYEE
+        StatutNote::Payee.as_str()
     } else {
-        STATUT_EMISE
+        StatutNote::Emise.as_str()
     };
     notes::set_statut(conn, note_id, statut)
 }
@@ -61,7 +57,7 @@ pub fn enregistrer(conn: &mut Connection, p: &NewPaiement) -> AppResult<i64> {
     }
     // Une facture annulée n'attend plus rien : sans ce garde-fou, encaisser
     // dessus la faisait silencieusement repasser en « emise ».
-    if notes::statut(conn, p.note_id)? == STATUT_ANNULEE {
+    if notes::statut(conn, p.note_id)? == StatutNote::ANNULEE {
         return Err(AppError::Validation(
             "cette facture est annulée : aucun paiement ne peut y être enregistré".into(),
         ));
@@ -172,7 +168,7 @@ mod tests {
         assert_eq!(s.paye, 10_000);
         assert_eq!(s.solde, 20_000);
         assert!(!s.payee);
-        assert_eq!(notes::get(&conn, note).unwrap().statut, STATUT_EMISE);
+        assert_eq!(notes::get(&conn, note).unwrap().statut, StatutNote::EMISE);
     }
 
     #[test]
@@ -184,7 +180,7 @@ mod tests {
         let s = solde(&conn, note).unwrap();
         assert_eq!(s.solde, 0);
         assert!(s.payee);
-        assert_eq!(notes::get(&conn, note).unwrap().statut, STATUT_PAYEE);
+        assert_eq!(notes::get(&conn, note).unwrap().statut, StatutNote::PAYEE);
     }
 
     #[test]
@@ -227,7 +223,7 @@ mod tests {
             },
         );
         assert!(matches!(res, Err(AppError::Validation(_))));
-        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_ANNULEE);
+        assert_eq!(notes::statut(&conn, note).unwrap(), StatutNote::ANNULEE);
     }
 
     /// Annuler une facture déjà encaissée ferait disparaître l'argent des
@@ -255,7 +251,7 @@ mod tests {
         // Une fois le paiement annulé, l'annulation passe.
         annuler(&mut conn, p).unwrap();
         notes::annuler(&conn, note).unwrap();
-        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_ANNULEE);
+        assert_eq!(notes::statut(&conn, note).unwrap(), StatutNote::ANNULEE);
     }
 
     /// Annuler un paiement le retire des totaux et réaligne le statut.
@@ -273,10 +269,10 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_PAYEE);
+        assert_eq!(notes::statut(&conn, note).unwrap(), StatutNote::PAYEE);
 
         annuler(&mut conn, p).unwrap();
-        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_EMISE);
+        assert_eq!(notes::statut(&conn, note).unwrap(), StatutNote::EMISE);
         assert_eq!(solde(&conn, note).unwrap().paye, 0);
         // Idempotent : ré-annuler ne change rien.
         annuler(&mut conn, p).unwrap();
@@ -312,13 +308,13 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_PAYEE);
+        assert_eq!(notes::statut(&conn, note).unwrap(), StatutNote::PAYEE);
 
         let recu = recus_service::generer(&conn, p1).unwrap();
         recus_service::annuler(&mut conn, recu.id).unwrap();
 
         // Il reste 10 000 dus : la facture est bien rouverte.
-        assert_eq!(notes::statut(&conn, note).unwrap(), STATUT_EMISE);
+        assert_eq!(notes::statut(&conn, note).unwrap(), StatutNote::EMISE);
         assert_eq!(solde(&conn, note).unwrap().solde, 10_000);
     }
 

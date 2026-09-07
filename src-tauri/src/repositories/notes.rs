@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{NoteDeFrais, NoteDetail, NoteLigne, NoteResume};
+use crate::models::{NoteDeFrais, NoteDetail, NoteLigne, NoteResume, StatutNote};
 use rusqlite::{Connection, Row};
 
 fn map_note(row: &Row) -> rusqlite::Result<NoteDeFrais> {
@@ -160,7 +160,7 @@ pub fn set_statut(conn: &Connection, id: i64, statut: &str) -> AppResult<()> {
 /// encaissé du tableau de bord et du solde client. Il faut d'abord annuler les
 /// paiements (ce qui trace le remboursement).
 pub fn annuler(conn: &Connection, id: i64) -> AppResult<()> {
-    if statut(conn, id)? == "annulee" {
+    if statut(conn, id)? == StatutNote::ANNULEE {
         return Ok(());
     }
     let actifs = nb_paiements_actifs(conn, id)?;
@@ -169,7 +169,7 @@ pub fn annuler(conn: &Connection, id: i64) -> AppResult<()> {
             "annulation impossible : {actifs} paiement(s) sont encore enregistrés              sur cette facture. Annulez-les d'abord."
         )));
     }
-    set_statut(conn, id, "annulee")
+    set_statut(conn, id, StatutNote::ANNULEE)
 }
 
 #[cfg(test)]

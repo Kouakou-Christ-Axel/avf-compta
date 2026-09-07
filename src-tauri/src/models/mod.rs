@@ -7,6 +7,7 @@ pub mod parametres;
 pub mod prestation;
 pub mod recu;
 pub mod stats;
+pub mod statut_note;
 
 pub use client::{Client, ClientResume, NewClient};
 pub use depense::{Depense, DepenseLigne, NewDepense};
@@ -17,3 +18,4 @@ pub use parametres::Parametres;
 pub use prestation::{NewPrestation, Prestation};
 pub use recu::{Recu, RecuDetail, RecuResume};
 pub use stats::{ResumeStats, StatMois};
+pub use statut_note::StatutNote;

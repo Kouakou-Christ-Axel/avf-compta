@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{Depense, DepenseLigne, NewDepense};
+use crate::models::{Depense, DepenseLigne, NewDepense, StatutNote};
 use rusqlite::{Connection, Row};
 
 fn map_row(row: &Row) -> rusqlite::Result<Depense> {
@@ -23,7 +23,7 @@ pub fn create(conn: &Connection, d: &NewDepense) -> AppResult<i64> {
         ));
     }
     if let Some(note_id) = d.note_id {
-        if super::notes::statut(conn, note_id)? == "annulee" {
+        if super::notes::statut(conn, note_id)? == StatutNote::ANNULEE {
             return Err(AppError::Validation(
                 "cette facture est annulée : aucune dépense ne peut y être ajoutée".into(),
             ));
