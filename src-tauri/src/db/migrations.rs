@@ -244,6 +244,23 @@ pub fn migrations() -> Migrations<'static> {
         CREATE INDEX idx_depenses_date  ON depenses(date_depense);
         "#,
         ),
+        // v15 : rattrapage des factures entièrement remisées. Une facture dont
+        // le net vaut 0 (remise de 100 %, ou remise en montant supérieure au
+        // brut) est soldée dès son émission, mais restait « emise » à vie :
+        // aucun paiement ne peut la solder, car un montant nul est refusé.
+        // Le recalcul de statut à la création corrige les nouvelles factures,
+        // celle-ci aligne celles déjà en base.
+        //
+        // Idempotente (au second passage plus aucune ligne ne correspond) et
+        // sans effet sur les factures annulées, que `statut = 'emise'` exclut.
+        M::up(
+            r#"
+        UPDATE notes_de_frais
+           SET statut = 'payee'
+         WHERE statut = 'emise'
+           AND id IN (SELECT note_id FROM note_totaux WHERE net = 0);
+        "#,
+        ),
     ])
 }
 
@@ -411,5 +428,55 @@ mod tests {
             .collect::<rusqlite::Result<_>>()
             .unwrap();
         assert_eq!(apres, ["Wave"]);
+    }
+
+    /// Rattrapage v15 : les factures entièrement remisées restaient « emise »
+    /// à vie, aucun paiement ne pouvant les solder. Les factures annulées et
+    /// celles qui restent dues ne doivent pas bouger.
+    #[test]
+    fn v15_solde_les_factures_a_net_nul() {
+        let mut conn = rusqlite::Connection::open_in_memory().unwrap();
+        let m = migrations();
+        m.to_version(&mut conn, 14).unwrap();
+
+        conn.execute_batch(
+            r#"
+            INSERT INTO clients (id, nom, cree_le) VALUES (1, 'Acme', '2026-01-01');
+            INSERT INTO prestations (id, libelle, prix, cree_le)
+                VALUES (1, 'Conseil', 10000, '2026-01-01');
+            -- Remise en montant supérieure au brut : net plafonné à 0.
+            INSERT INTO notes_de_frais (id, client_id, reference, date_emission, statut, cree_le,
+                                        remise_type, remise_valeur)
+                VALUES (1, 1, '26-01-0001', '2026-01-01', 'emise', '2026-01-01', 'montant', 99000);
+            INSERT INTO note_lignes (note_id, prestation_id, libelle_snapshot, prix_snapshot, quantite)
+                VALUES (1, 1, 'Conseil', 10000, 1);
+            -- Facture ordinaire : reste due.
+            INSERT INTO notes_de_frais (id, client_id, reference, date_emission, statut, cree_le)
+                VALUES (2, 1, '26-01-0002', '2026-01-01', 'emise', '2026-01-01');
+            INSERT INTO note_lignes (note_id, prestation_id, libelle_snapshot, prix_snapshot, quantite)
+                VALUES (2, 1, 'Conseil', 10000, 1);
+            -- Facture annulée à net nul : ne doit pas être ressuscitée.
+            INSERT INTO notes_de_frais (id, client_id, reference, date_emission, statut, cree_le,
+                                        remise_type, remise_valeur)
+                VALUES (3, 1, '26-01-0003', '2026-01-01', 'annulee', '2026-01-01', 'pourcent', 100);
+            INSERT INTO note_lignes (note_id, prestation_id, libelle_snapshot, prix_snapshot, quantite)
+                VALUES (3, 1, 'Conseil', 10000, 1);
+            "#,
+        )
+        .unwrap();
+
+        m.to_latest(&mut conn).unwrap();
+
+        let statut = |id: i64| -> String {
+            conn.query_row(
+                "SELECT statut FROM notes_de_frais WHERE id = ?1",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        assert_eq!(statut(1), "payee", "une facture à net nul est soldée");
+        assert_eq!(statut(2), "emise", "une facture due ne doit pas bouger");
+        assert_eq!(statut(3), "annulee", "une facture annulée le reste");
     }
 }

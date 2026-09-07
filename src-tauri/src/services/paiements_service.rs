@@ -21,7 +21,12 @@ pub fn solde(conn: &Connection, note_id: i64) -> AppResult<SoldeNote> {
         total,
         paye,
         solde,
-        payee: solde <= 0 && total > 0,
+        // Pas de garde `total > 0` : une facture à net nul (remise de 100 %, ou
+        // remise en montant supérieure au brut) est soldée dès son émission.
+        // Aucun paiement ne peut la solder après coup — `enregistrer` refuse
+        // tout montant nul ou négatif — donc l'exiger la laissait « emise » à
+        // vie alors que rien n'est dû.
+        payee: solde <= 0,
     })
 }
 

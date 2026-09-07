@@ -91,12 +91,25 @@ pub fn find_by_paiement(conn: &Connection, paiement_id: i64) -> AppResult<Option
 
 /// Prochain numéro de reçu, dérivé du **plus grand numéro déjà émis** et non
 /// d'un `COUNT(*)` : supprimer un reçu ne fait plus réattribuer son numéro.
+///
+/// Le maximum est calculé sur la partie **numérique** du numéro, pas sur le
+/// texte : `numero` est une colonne `TEXT`, et `MAX()` y compare caractère par
+/// caractère. Or `{:04}` est une largeur *minimale*, donc le 10 000ᵉ reçu
+/// s'écrit `RECU-10000` — lexicographiquement **inférieur** à `RECU-9999`
+/// (`'1' < '9'`). Un `MAX(numero)` textuel renvoyait donc éternellement
+/// `RECU-9999` et réémettait `RECU-10000` à chaque fois, en doublon silencieux
+/// (l'index `idx_recus_numero` n'est volontairement pas unique).
 pub fn prochain_numero(conn: &Connection) -> AppResult<String> {
-    let max: Option<String> = conn.query_row("SELECT MAX(numero) FROM recus", [], |r| r.get(0))?;
-    let suivant = max
-        .and_then(|n| n.rsplit('-').next().and_then(|d| d.parse::<i64>().ok()))
-        .unwrap_or(0)
-        + 1;
+    // SUBSTR est en base 1 : le 6ᵉ caractère est ce qui suit « RECU- ».
+    // CAST ignore les zéros de tête, donc les numéros historiques
+    // « RECU-0001 »…« RECU-9999 » sont relus correctement.
+    let max: Option<i64> = conn.query_row(
+        "SELECT MAX(CAST(SUBSTR(numero, 6) AS INTEGER))
+           FROM recus WHERE numero LIKE 'RECU-%'",
+        [],
+        |r| r.get(0),
+    )?;
+    let suivant = max.unwrap_or(0) + 1;
     Ok(format!("RECU-{suivant:04}"))
 }
 
@@ -287,5 +300,87 @@ mod tests {
     fn detail_missing_is_not_found() {
         let conn = open_in_memory().unwrap();
         assert!(matches!(detail(&conn, 999), Err(AppError::NotFound(_))));
+    }
+
+    /// Crée une note de 50 000 réglée en `nb` versements égaux et renvoie les
+    /// identifiants de paiement (un reçu au plus par paiement).
+    fn paiements_pour_recus(conn: &mut Connection, nb: i64) -> Vec<i64> {
+        let client = clients::create(
+            conn,
+            &NewClient {
+                nom: "Acme".into(),
+                email: None,
+                telephone: None,
+                adresse: None,
+            },
+        )
+        .unwrap();
+        let presta = prestations::create(
+            conn,
+            &NewPrestation {
+                libelle: "Conseil".into(),
+                prix: 50_000,
+            },
+        )
+        .unwrap();
+        let note = notes_service::create_note(
+            conn,
+            &NewNote {
+                client_id: client,
+                date_emission: "2026-06-18".into(),
+                echeance: None,
+                lignes: vec![NewNoteLigne {
+                    prestation_id: presta,
+                    quantite: 1,
+                }],
+                remise_type: None,
+                remise_valeur: 0,
+            },
+        )
+        .unwrap();
+        (0..nb)
+            .map(|_| {
+                paiements_service::enregistrer(
+                    conn,
+                    &NewPaiement {
+                        note_id: note,
+                        montant: 50_000 / nb,
+                        date_paiement: "2026-06-18".into(),
+                        methode: None,
+                    },
+                )
+                .unwrap()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn prochain_numero_part_de_un_sur_une_base_vide() {
+        let conn = open_in_memory().unwrap();
+        assert_eq!(prochain_numero(&conn).unwrap(), "RECU-0001");
+    }
+
+    /// `numero` est du TEXT : un `MAX()` y compare caractère par caractère, et
+    /// « RECU-10000 » y passe **avant** « RECU-9999 » (`'1' < '9'`). La
+    /// séquence rendait donc « RECU-10000 » indéfiniment, en doublon, l'index
+    /// sur `numero` n'étant volontairement pas unique.
+    #[test]
+    fn prochain_numero_ne_recycle_pas_au_dela_de_9999() {
+        let mut conn = open_in_memory().unwrap();
+        let paiements = paiements_pour_recus(&mut conn, 2);
+        insert(&conn, paiements[0], "RECU-9999", 50_000, 0).unwrap();
+        insert(&conn, paiements[1], "RECU-10000", 50_000, 0).unwrap();
+
+        assert_eq!(prochain_numero(&conn).unwrap(), "RECU-10001");
+    }
+
+    /// La séquence usuelle (numéros à quatre chiffres) reste inchangée.
+    #[test]
+    fn prochain_numero_suit_la_sequence_sous_10000() {
+        let mut conn = open_in_memory().unwrap();
+        let paiements = paiements_pour_recus(&mut conn, 1);
+        insert(&conn, paiements[0], "RECU-0007", 50_000, 0).unwrap();
+
+        assert_eq!(prochain_numero(&conn).unwrap(), "RECU-0008");
     }
 }
