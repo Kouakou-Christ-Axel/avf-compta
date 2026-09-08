@@ -7,6 +7,53 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Corrigé (audit bugs et simplification)
+
+- **Numéros de reçus en double au-delà du 9999e.** Le numéro suivant était
+  déduit du plus grand numéro _au sens du texte_ : « RECU-10000 » y passe avant
+  « RECU-9999 », si bien que le même numéro aurait été réémis indéfiniment,
+  sans que rien ne s'y oppose en base. Deux reçus auraient porté le même
+  numéro légal. Les références de facture (AA-MM-NNNN) avaient le même défaut,
+  atténué par leur remise à zéro chaque mois.
+- **Facture entièrement remisée bloquée en « émise ».** Une facture dont le
+  net tombe à zéro (remise de 100 %, ou remise en FCFA supérieure au total)
+  restait affichée comme impayée à vie : aucun paiement ne pouvait la solder,
+  puisqu'un montant nul est refusé. Elle est désormais marquée « payée » dès
+  son émission, et les factures déjà en base sont rattrapées à la mise à jour.
+- **Facture affichée à 0 FCFA à la modification.** Rouvrir une facture portant
+  une prestation archivée depuis en vidait l'affichage : la ligne perdait son
+  libellé et son montant, et le total affiché tombait à zéro — au moment précis
+  où l'on vérifie la facture. Le montant enregistré, lui, restait juste.
+- **Import CSV aux colonnes décalées.** Un fichier séparé par des virgules
+  contenant un seul point-virgule dans une cellule (une adresse, par exemple)
+  était lu avec le mauvais séparateur, et les colonnes se décalaient en
+  silence.
+- **Rappel des factures en retard répété** à chaque retour sur l'onglet
+  Factures, au lieu d'une fois par lancement.
+- **Reçus** : la liste affichait « Aucun reçu pour le moment » pendant son
+  premier chargement.
+- **Restauration** : choisir un fichier inexistant créait une base vide à cet
+  emplacement au lieu d'être simplement refusé.
+- **Échéance antérieure à la date d'émission** désormais refusée par
+  l'application elle-même, et plus seulement par le formulaire.
+- **Accessibilité** : les champs de saisie du paiement et de la dépense n'ont
+  plus pour seule étiquette un texte indicatif, invisible des lecteurs d'écran
+  dès que la frappe commence.
+
+### Modifié (structure interne, sans effet visible)
+
+- Le statut d'une facture est désormais un type à part entière plutôt qu'une
+  chaîne libre recopiée dans huit fichiers ; une faute de frappe ne peut plus
+  désactiver une règle en silence.
+- La page Factures, qui faisait 1055 lignes, est découpée en composants à
+  responsabilité unique (liste, formulaire, détail). Le rendu est identique.
+- Les aperçus avant impression partagent leur en-tête et leur cadre, à
+  structure HTML strictement identique.
+- Les règles métier qui restaient dans les accès aux données sont remontées
+  dans les services, comme partout ailleurs.
+- La couverture de tests passe de 109 à 144 cas, dont les pages Prestations et
+  Reçus qui n'en avaient aucun.
+
 ### Corrigé (audit production)
 
 - **Un seul reçu par paiement.** Prévisualiser un reçu en créait un nouveau à
