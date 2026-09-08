@@ -345,6 +345,21 @@ textarea:focus {
   font-size: 0.88rem;
 }
 
+/* Avertissement avant installation : l'écran « Éditeur inconnu » de Windows
+   surprend, et l'abandonner en cours de route laisse le poste sans app. */
+.avertissement-maj {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+.maj-progression {
+  width: 100%;
+  height: 0.5rem;
+}
+
 /* ---------- Buttons ---------- */
 
 button {

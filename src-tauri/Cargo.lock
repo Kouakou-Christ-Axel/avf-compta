@@ -239,6 +239,7 @@ name = "avf-compta"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "rfd",
  "rusqlite",
  "rusqlite_migration",
  "serde",
