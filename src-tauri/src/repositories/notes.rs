@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{NoteDeFrais, NoteDetail, NoteLigne, NoteResume, StatutNote};
+use crate::models::{NoteDeFrais, NoteDetail, NoteLigne, NoteResume};
 use rusqlite::{Connection, Row};
 
 fn map_note(row: &Row) -> rusqlite::Result<NoteDeFrais> {
@@ -151,25 +151,6 @@ pub fn set_statut(conn: &Connection, id: i64, statut: &str) -> AppResult<()> {
         return Err(AppError::NotFound(format!("note {id}")));
     }
     Ok(())
-}
-
-/// Annule une note (statut « annulee ») ; elle est exclue des totaux/stats.
-///
-/// Refusé tant qu'un paiement valide y est rattaché : les totaux excluant les
-/// notes annulées, l'annulation ferait disparaître de l'argent réellement
-/// encaissé du tableau de bord et du solde client. Il faut d'abord annuler les
-/// paiements (ce qui trace le remboursement).
-pub fn annuler(conn: &Connection, id: i64) -> AppResult<()> {
-    if statut(conn, id)? == StatutNote::ANNULEE {
-        return Ok(());
-    }
-    let actifs = nb_paiements_actifs(conn, id)?;
-    if actifs > 0 {
-        return Err(AppError::Validation(format!(
-            "annulation impossible : {actifs} paiement(s) sont encore enregistrés              sur cette facture. Annulez-les d'abord."
-        )));
-    }
-    set_statut(conn, id, StatutNote::ANNULEE)
 }
 
 #[cfg(test)]

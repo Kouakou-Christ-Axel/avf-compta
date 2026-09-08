@@ -211,7 +211,7 @@ mod tests {
     fn paiement_sur_facture_annulee_est_refuse() {
         let mut conn = open_in_memory().unwrap();
         let note = note_de_300(&mut conn);
-        notes::annuler(&conn, note).unwrap();
+        notes_service::annuler(&conn, note).unwrap();
 
         let res = enregistrer(
             &mut conn,
@@ -244,13 +244,13 @@ mod tests {
         .unwrap();
 
         assert!(matches!(
-            notes::annuler(&conn, note),
+            notes_service::annuler(&conn, note),
             Err(AppError::Validation(_))
         ));
 
         // Une fois le paiement annulé, l'annulation passe.
         annuler(&mut conn, p).unwrap();
-        notes::annuler(&conn, note).unwrap();
+        notes_service::annuler(&conn, note).unwrap();
         assert_eq!(notes::statut(&conn, note).unwrap(), StatutNote::ANNULEE);
     }
 

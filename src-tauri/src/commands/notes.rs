@@ -38,5 +38,5 @@ pub fn update_note(state: State<'_, DbState>, id: i64, note: NewNote) -> AppResu
 #[tauri::command]
 pub fn annuler_note(state: State<'_, DbState>, id: i64) -> AppResult<()> {
     let conn = db(&state);
-    notes::annuler(&conn, id)
+    notes_service::annuler(&conn, id)
 }

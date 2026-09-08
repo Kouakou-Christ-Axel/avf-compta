@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{Depense, DepenseLigne, NewDepense, StatutNote};
+use crate::models::{Depense, DepenseLigne, NewDepense};
 use rusqlite::{Connection, Row};
 
 fn map_row(row: &Row) -> rusqlite::Result<Depense> {
@@ -13,22 +13,9 @@ fn map_row(row: &Row) -> rusqlite::Result<Depense> {
     })
 }
 
-pub fn create(conn: &Connection, d: &NewDepense) -> AppResult<i64> {
-    if d.libelle.trim().is_empty() {
-        return Err(AppError::Validation("le libellé est requis".into()));
-    }
-    if d.montant <= 0 {
-        return Err(AppError::Validation(
-            "le montant de la dépense doit être positif".into(),
-        ));
-    }
-    if let Some(note_id) = d.note_id {
-        if super::notes::statut(conn, note_id)? == StatutNote::ANNULEE {
-            return Err(AppError::Validation(
-                "cette facture est annulée : aucune dépense ne peut y être ajoutée".into(),
-            ));
-        }
-    }
+/// Insère une dépense. Les règles métier (libellé, montant, facture annulée)
+/// sont appliquées par `services::depenses_service::create`.
+pub fn insert(conn: &Connection, d: &NewDepense) -> AppResult<i64> {
     conn.execute(
         "INSERT INTO depenses (note_id, libelle, montant, date_depense, cree_le)
          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -138,7 +125,7 @@ mod tests {
     fn create_list_and_total() {
         let mut conn = open_in_memory().unwrap();
         let note = note_avec_total(&mut conn);
-        create(
+        insert(
             &conn,
             &NewDepense {
                 note_id: Some(note),
@@ -148,7 +135,7 @@ mod tests {
             },
         )
         .unwrap();
-        create(
+        insert(
             &conn,
             &NewDepense {
                 note_id: Some(note),
@@ -162,41 +149,11 @@ mod tests {
         assert_eq!(total_by_note(&conn, note).unwrap(), 20_000);
     }
 
-    #[test]
-    fn rejects_invalid() {
-        let mut conn = open_in_memory().unwrap();
-        let note = note_avec_total(&mut conn);
-        assert!(matches!(
-            create(
-                &conn,
-                &NewDepense {
-                    note_id: Some(note),
-                    libelle: " ".into(),
-                    montant: 1_000,
-                    date_depense: "2026-06-18".into(),
-                },
-            ),
-            Err(AppError::Validation(_))
-        ));
-        assert!(matches!(
-            create(
-                &conn,
-                &NewDepense {
-                    note_id: Some(note),
-                    libelle: "X".into(),
-                    montant: 0,
-                    date_depense: "2026-06-18".into(),
-                },
-            ),
-            Err(AppError::Validation(_))
-        ));
-    }
-
     /// Une charge générale du cabinet n'est rattachée à aucune facture.
     #[test]
     fn depense_sans_facture_est_acceptee() {
         let conn = open_in_memory().unwrap();
-        let id = create(
+        let id = insert(
             &conn,
             &NewDepense {
                 note_id: None,
@@ -220,7 +177,7 @@ mod tests {
         use crate::repositories::stats;
 
         let conn = open_in_memory().unwrap();
-        create(
+        insert(
             &conn,
             &NewDepense {
                 note_id: None,

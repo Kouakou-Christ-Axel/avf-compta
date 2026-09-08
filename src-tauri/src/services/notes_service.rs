@@ -253,6 +253,26 @@ pub fn update_note(conn: &mut Connection, id: i64, n: &NewNote) -> AppResult<()>
     Ok(())
 }
 
+/// Annule une facture (statut « annulee ») : elle sort des totaux et des
+/// statistiques, mais reste consultable.
+///
+/// Refusé tant qu'un paiement valide y est rattaché : les totaux excluant les
+/// factures annulées, l'annulation ferait disparaître du tableau de bord et du
+/// solde client de l'argent réellement encaissé. Il faut d'abord annuler les
+/// paiements, ce qui trace le remboursement.
+pub fn annuler(conn: &Connection, id: i64) -> AppResult<()> {
+    if notes::statut(conn, id)? == StatutNote::ANNULEE {
+        return Ok(());
+    }
+    let actifs = notes::nb_paiements_actifs(conn, id)?;
+    if actifs > 0 {
+        return Err(AppError::Validation(format!(
+            "annulation impossible : {actifs} paiement(s) sont encore enregistrés              sur cette facture. Annulez-les d'abord."
+        )));
+    }
+    notes::set_statut(conn, id, StatutNote::ANNULEE)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -554,7 +574,7 @@ mod tests {
         let mut conn = open_in_memory().unwrap();
         let (client, presta) = seed(&conn);
         let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
-        notes::annuler(&conn, id).unwrap();
+        annuler(&conn, id).unwrap();
 
         assert!(matches!(
             update_note(&mut conn, id, &new_note(client, presta, 2)),
@@ -755,7 +775,7 @@ mod tests {
             20_000
         );
 
-        notes::annuler(&conn, id).unwrap();
+        annuler(&conn, id).unwrap();
 
         assert_eq!(stats::resume(&conn, None, None).unwrap().total_facture, 0);
         assert_eq!(stats::resume(&conn, None, None).unwrap().nb_notes, 0);
