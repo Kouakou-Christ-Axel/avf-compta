@@ -900,12 +900,15 @@ button:hover {
 /* ---------- Print ---------- */
 
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  .recu-print,
-  .recu-print * {
-    visibility: visible;
+  /* NoteImprimable/RecuImprimable sont rendus via un portail sous <body>, en
+     dehors de #root : masquer #root en bloc suffit à écarter tout le reste
+     de l'appli sans laisser d'espace résiduel. La technique classique
+     « body * { visibility: hidden } » a été abandonnée : elle masque le
+     contenu mais conserve la place qu'il occupe dans le flux, ce qui
+     repoussait le document imprimé loin après la première page — une
+     impression qui semblait vide. */
+  #root {
+    display: none;
   }
 
   /* Le document imprimé vit dans une fenêtre modale : sans neutraliser le

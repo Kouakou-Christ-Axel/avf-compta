@@ -76,13 +76,14 @@ const recu: RecuDetail = {
 
 /**
  * `App.css` accroche ses règles `@media print` à la structure et aux classes de
- * ces deux aperçus. Un instantané fige donc le DOM rendu : extraire l'en-tête
- * et la coque communs ne doit rien y changer, or aucun test ne regarde la mise
- * en page imprimée.
+ * ces deux aperçus, et l'impression dépend de leur rendu **sous `<body>`**, via
+ * un portail, en dehors de `#root`. Un instantané fige donc tout cela : aucun
+ * autre test ne regarde la mise en page imprimée, qu'un refactor peut casser
+ * en silence.
  */
 describe("DOM des aperçus avant impression", () => {
   it("facture — structure figée", () => {
-    const { container } = render(
+    render(
       <NoteImprimable
         detail={detail}
         solde={solde}
@@ -91,13 +92,11 @@ describe("DOM des aperçus avant impression", () => {
         onClose={() => {}}
       />,
     );
-    expect(container.innerHTML).toMatchSnapshot();
+    expect(document.body.innerHTML).toMatchSnapshot();
   });
 
   it("reçu — structure figée", () => {
-    const { container } = render(
-      <RecuImprimable recu={recu} params={params} onClose={() => {}} />,
-    );
-    expect(container.innerHTML).toMatchSnapshot();
+    render(<RecuImprimable recu={recu} params={params} onClose={() => {}} />);
+    expect(document.body.innerHTML).toMatchSnapshot();
   });
 });

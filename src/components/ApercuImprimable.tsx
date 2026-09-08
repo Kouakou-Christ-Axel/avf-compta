@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Parametres } from "../api/types";
 
 /**
@@ -32,6 +33,13 @@ export function EnTeteCabinet({
  * Coque des aperçus avant impression : la fenêtre modale, la zone imprimable,
  * le filigrane éventuel et les boutons — eux exclus de l'impression par
  * `no-print`.
+ *
+ * Rendue via un portail directement sous `<body>`, en dehors de `#root` : à
+ * l'impression, `#root` est masqué en bloc (`display: none`) et seul ce
+ * portail reste dans le flux. Nichée dans `#root`, la modale aurait hérité de
+ * la place occupée par le reste de la page (masqué en `visibility: hidden`,
+ * qui conserve l'espace) et se serait retrouvée repoussée bien après la
+ * première page imprimée — une impression qui semblait vide.
  */
 export function ApercuImprimable({
   filigrane,
@@ -43,7 +51,7 @@ export function ApercuImprimable({
   onClose: () => void;
   children: ReactNode;
 }) {
-  return (
+  return createPortal(
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal">
         <div className="recu-print">
@@ -62,6 +70,7 @@ export function ApercuImprimable({
           <button onClick={onClose}>Fermer</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
