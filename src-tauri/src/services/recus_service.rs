@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::Recu;
+use crate::models::{Recu, StatutNote};
 use crate::repositories::{notes, paiements, recus};
 use rusqlite::Connection;
 
@@ -25,7 +25,7 @@ pub fn generer(conn: &Connection, paiement_id: i64) -> AppResult<Recu> {
         ));
     }
 
-    if notes::statut(conn, paiement.note_id)? == "annulee" {
+    if notes::statut(conn, paiement.note_id)? == StatutNote::ANNULEE {
         return Err(AppError::Validation(
             "impossible de générer un reçu : la facture est annulée".into(),
         ));

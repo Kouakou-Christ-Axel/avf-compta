@@ -6,7 +6,7 @@
 //! ouverture, que la bascule est faite. L'interface propose de redémarrer.
 
 use crate::error::{AppError, AppResult};
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
 use std::path::{Path, PathBuf};
 
 /// Nom du fichier de base dans le dossier de données de l'application.
@@ -44,9 +44,14 @@ pub fn restaurer(dossier: &Path, source: &str) -> AppResult<()> {
 /// sans ce contrôle, restaurer un fichier quelconque rendrait l'application
 /// impossible à ouvrir.
 fn verifier_base(source: &str) -> AppResult<()> {
-    let conn = Connection::open(source).map_err(|_| {
-        AppError::Validation("ce fichier n'est pas une sauvegarde avf-compta".into())
-    })?;
+    // Lecture seule explicite : `Connection::open` sous-entend
+    // `SQLITE_OPEN_CREATE`, et créait donc un fichier SQLite vide à
+    // l'emplacement choisi quand celui-ci n'existait pas — un fichier fantôme
+    // laissé sur le disque en guise de « vérification » ratée.
+    let conn =
+        Connection::open_with_flags(source, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(|_| {
+            AppError::Validation("ce fichier n'est pas une sauvegarde avf-compta".into())
+        })?;
     let tables: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM sqlite_master
@@ -147,6 +152,22 @@ mod tests {
             restaurer(&dossier, intrus.to_str().unwrap()),
             Err(AppError::Validation(_))
         ));
+        assert!(!dossier.join(RESTORE_FILE).exists());
+    }
+
+    /// Vérifier un chemin inexistant ne doit rien écrire : `Connection::open`
+    /// sous-entend `SQLITE_OPEN_CREATE` et laissait derrière lui un fichier
+    /// SQLite vide à l'emplacement refusé.
+    #[test]
+    fn restaurer_un_fichier_inexistant_ne_cree_rien() {
+        let dossier = dossier_temporaire("fichier-inexistant");
+        let absent = dossier.join("absent.sqlite");
+
+        assert!(matches!(
+            restaurer(&dossier, absent.to_str().unwrap()),
+            Err(AppError::Validation(_))
+        ));
+        assert!(!absent.exists(), "aucun fichier ne doit avoir été créé");
         assert!(!dossier.join(RESTORE_FILE).exists());
     }
 

@@ -10,16 +10,17 @@ import { formatMontant } from "../api/money";
 import type { Parametres, RecuDetail, RecuResume } from "../api/types";
 import { BarreRecherche } from "../components/BarreRecherche";
 import { RecuImprimable } from "../components/RecuImprimable";
-import { useToast } from "../components/toast-context";
+import { useActionPage } from "../hooks/useActionPage";
 import { correspond } from "../utils/recherche";
 
 export function RecusPage() {
-  const { showToast } = useToast();
   const [recus, setRecus] = useState<RecuResume[]>([]);
   const [params, setParams] = useState<Parametres | null>(null);
   const [apercu, setApercu] = useState<RecuDetail | null>(null);
   const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+  const executer = useActionPage(setErreur);
+  const [chargement, setChargement] = useState(true);
 
   const recusFiltres = useMemo(
     () =>
@@ -39,38 +40,27 @@ export function RecusPage() {
         setRecus(r);
         setParams(p);
       })
-      .catch((e) => setErreur(String(e)));
+      .catch((e) => setErreur(String(e)))
+      .finally(() => setChargement(false));
   }, []);
 
-  async function ouvrir(id: number) {
-    setErreur(null);
-    try {
-      setApercu(await getRecu(id));
-    } catch (e) {
-      setErreur(String(e));
-    }
-  }
+  const ouvrir = (id: number) =>
+    executer(async () => setApercu(await getRecu(id)));
 
-  async function annuler(id: number) {
-    if (!confirm("Annuler ce reçu ? Le paiement lié sera annulé.")) return;
-    setErreur(null);
-    try {
-      await annulerRecu(id);
-      await recharger();
-      showToast("Reçu annulé");
-    } catch (e) {
-      setErreur(String(e));
-    }
-  }
+  const annuler = (id: number) =>
+    executer(
+      async () => {
+        await annulerRecu(id);
+        await recharger();
+      },
+      {
+        confirmation: "Annuler ce reçu ? Le paiement lié sera annulé.",
+        succes: "Reçu annulé",
+      },
+    );
 
-  async function exporterCsv() {
-    setErreur(null);
-    try {
-      if (await exporterRecusCsv()) showToast("Liste exportée");
-    } catch (e) {
-      setErreur(String(e));
-    }
-  }
+  const exporterCsv = () =>
+    executer(exporterRecusCsv, { succes: "Liste exportée" });
 
   return (
     <section className="page">
@@ -134,9 +124,11 @@ export function RecusPage() {
             {recusFiltres.length === 0 && (
               <tr>
                 <td colSpan={5} className="vide">
-                  {recus.length === 0
-                    ? "Aucun reçu pour le moment."
-                    : "Aucun reçu ne correspond à la recherche."}
+                  {chargement
+                    ? "Chargement…"
+                    : recus.length === 0
+                      ? "Aucun reçu pour le moment."
+                      : "Aucun reçu ne correspond à la recherche."}
                 </td>
               </tr>
             )}

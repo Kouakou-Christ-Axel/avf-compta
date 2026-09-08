@@ -16,6 +16,7 @@ import { formatMontant } from "../api/money";
 import { CopyText } from "../components/CopyText";
 import { BarreRecherche } from "../components/BarreRecherche";
 import { useToast } from "../components/toast-context";
+import { useActionPage } from "../hooks/useActionPage";
 import { correspond } from "../utils/recherche";
 
 export function ClientsPage() {
@@ -26,6 +27,7 @@ export function ClientsPage() {
   const [telephone, setTelephone] = useState("");
   const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+  const executer = useActionPage(setErreur);
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
   // Client en cours de modification (null = formulaire d'ajout).
@@ -106,49 +108,33 @@ export function ClientsPage() {
     }
   }
 
-  async function supprimer(c: ClientResume) {
-    if (!confirm(`Supprimer définitivement « ${c.nom} » ?`)) return;
-    setErreur(null);
-    try {
-      await deleteClient(c.id);
-      if (edition?.id === c.id) reinitialiser();
-      await recharger();
-      showToast("Client supprimé");
-    } catch (err) {
-      setErreur(String(err));
-    }
-  }
+  const supprimer = (c: ClientResume) =>
+    executer(
+      async () => {
+        await deleteClient(c.id);
+        if (edition?.id === c.id) reinitialiser();
+        await recharger();
+      },
+      {
+        confirmation: `Supprimer définitivement « ${c.nom} » ?`,
+        succes: "Client supprimé",
+      },
+    );
 
   async function importer() {
-    setErreur(null);
-    try {
-      const n = await importerClientsCsv();
-      if (n !== null) {
-        await recharger();
-        showToast(`${n} client(s) importé(s)`);
-      }
-    } catch (err) {
-      setErreur(String(err));
-    }
+    let importes: number | null = null;
+    await executer(async () => {
+      importes = await importerClientsCsv();
+      if (importes !== null) await recharger();
+    });
+    if (importes !== null) showToast(`${importes} client(s) importé(s)`);
   }
 
-  async function exporter() {
-    setErreur(null);
-    try {
-      if (await exporterClientsCsv()) showToast("Liste exportée");
-    } catch (err) {
-      setErreur(String(err));
-    }
-  }
+  const exporter = () =>
+    executer(exporterClientsCsv, { succes: "Liste exportée" });
 
-  async function modele() {
-    setErreur(null);
-    try {
-      if (await telechargerModeleClients()) showToast("Modèle enregistré");
-    } catch (err) {
-      setErreur(String(err));
-    }
-  }
+  const modele = () =>
+    executer(telechargerModeleClients, { succes: "Modèle enregistré" });
 
   return (
     <section className="page">

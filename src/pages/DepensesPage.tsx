@@ -11,6 +11,7 @@ import { formatMontant, parseMontant } from "../api/money";
 import type { ClientResume, DepenseLigne, NoteResume } from "../api/types";
 import { BarreRecherche } from "../components/BarreRecherche";
 import { useToast } from "../components/toast-context";
+import { useActionPage } from "../hooks/useActionPage";
 import { correspond } from "../utils/recherche";
 
 /** Facture de rattachement d'une dépense, ou sa nature si elle n'en a pas. */
@@ -35,6 +36,7 @@ export function DepensesPage() {
   const [date, setDate] = useState(aujourdhui);
   const [recherche, setRecherche] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+  const executer = useActionPage(setErreur);
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
 
@@ -115,26 +117,20 @@ export function DepensesPage() {
     }
   }
 
-  async function supprimer(d: DepenseLigne) {
-    if (!confirm(`Supprimer la dépense « ${d.libelle} » ?`)) return;
-    setErreur(null);
-    try {
-      await deleteDepense(d.id);
-      await recharger();
-      showToast("Dépense supprimée");
-    } catch (err) {
-      setErreur(String(err));
-    }
-  }
+  const supprimer = (d: DepenseLigne) =>
+    executer(
+      async () => {
+        await deleteDepense(d.id);
+        await recharger();
+      },
+      {
+        confirmation: `Supprimer la dépense « ${d.libelle} » ?`,
+        succes: "Dépense supprimée",
+      },
+    );
 
-  async function exporter() {
-    setErreur(null);
-    try {
-      if (await exporterDepensesCsv()) showToast("Dépenses exportées");
-    } catch (err) {
-      setErreur(String(err));
-    }
-  }
+  const exporter = () =>
+    executer(exporterDepensesCsv, { succes: "Dépenses exportées" });
 
   const total = depensesFiltrees.reduce((acc, d) => acc + d.montant, 0);
 

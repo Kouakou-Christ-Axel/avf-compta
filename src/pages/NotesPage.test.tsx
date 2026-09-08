@@ -79,6 +79,7 @@ function mockPage(paiements: Paiement[], resume: NoteResume = note) {
       case "list_notes_resume":
         return [resume];
       case "list_clients":
+      case "list_prestations":
       case "list_prestations_actives":
       case "list_modes_paiement":
         return [];
@@ -202,5 +203,65 @@ describe("NotesPage — modification", () => {
       within(formulaire).getByRole("button", { name: "Annuler" }),
     );
     expect(screen.getByText("Nouvelle facture")).toBeInTheDocument();
+  });
+
+  /// Une prestation archivée reste portée par les factures déjà émises. Ne
+  /// charger que les prestations actives laissait la ligne sans libellé et à
+  /// 0 FCFA : la facture semblait vidée au moment même de sa vérification.
+  it("affiche les lignes portant une prestation archivée", async () => {
+    const archivee = {
+      id: 1,
+      libelle: "Bilan annuel",
+      prix: 30000,
+      actif: false,
+      cree_le: "2026-01-01",
+    };
+    mockIPC((cmd) => {
+      switch (cmd) {
+        case "list_notes_resume":
+          return [{ ...note, paye: 0, solde: 27000 }];
+        case "list_prestations":
+          return [archivee]; // archivée, mais toujours facturée
+        case "list_clients":
+        case "list_prestations_actives":
+        case "list_modes_paiement":
+          return [];
+        case "get_parametres":
+          return {
+            cabinet_nom: null,
+            sous_titre: null,
+            email: null,
+            telephone: null,
+            coordonnees_paiement: null,
+            logo: null,
+          };
+        case "get_note":
+          return detail;
+        default:
+          return undefined;
+      }
+    });
+    render(
+      <ToastProvider>
+        <NotesPage />
+      </ToastProvider>,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Modifier" }),
+    );
+
+    const formulaire = (
+      await screen.findByRole("button", {
+        name: "Enregistrer les modifications",
+      })
+    ).closest("form") as HTMLElement;
+    // Le libellé et le montant de la ligne restent lisibles…
+    const ligne = await within(formulaire).findByRole("listitem");
+    expect(within(ligne).getByText("Bilan annuel")).toBeInTheDocument();
+    expect(within(ligne).getByText(/30\s000/)).toBeInTheDocument();
+    // …mais la prestation archivée n'est pas proposée à l'ajout.
+    expect(
+      within(formulaire).queryByRole("button", { name: /\+ Bilan annuel/ }),
+    ).not.toBeInTheDocument();
   });
 });

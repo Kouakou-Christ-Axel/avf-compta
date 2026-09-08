@@ -1,11 +1,8 @@
 use crate::error::{AppError, AppResult};
-use crate::models::NewNote;
+use crate::models::{NewNote, StatutNote};
 use crate::money::Money;
 use crate::repositories::{notes, prestations};
 use rusqlite::Connection;
-
-/// Statut initial d'une note de frais.
-pub const STATUT_EMISE: &str = "emise";
 
 /// Remise exprimée en francs CFA.
 pub const REMISE_MONTANT: &str = "montant";
@@ -27,6 +24,22 @@ fn valider_remise(remise_type: Option<&str>, valeur: i64) -> AppResult<()> {
         Some(autre) => Err(AppError::Validation(format!(
             "type de remise inconnu: {autre}"
         ))),
+    }
+}
+
+/// Une échéance antérieure à l'émission n'a pas de sens : la facture serait
+/// due avant d'exister. Le formulaire le refuse déjà, mais c'est le backend qui
+/// fait foi — un appel direct à la commande (script, import en masse) doit
+/// buter sur la même règle.
+///
+/// Les dates sont au format `YYYY-MM-DD`, donc l'ordre lexicographique est
+/// l'ordre chronologique.
+fn valider_echeance(n: &NewNote) -> AppResult<()> {
+    match &n.echeance {
+        Some(e) if e.as_str() < n.date_emission.as_str() => Err(AppError::Validation(
+            "l'échéance ne peut pas précéder la date d'émission".into(),
+        )),
+        _ => Ok(()),
     }
 }
 
@@ -98,18 +111,21 @@ fn annee_mois(date: &str) -> AppResult<(&str, &str)> {
 /// légal. L'application ne supprime plus de facture (seule l'annulation
 /// existe), mais une base restaurée ou retouchée à la main peut présenter des
 /// trous.
+///
+/// Ce maximum est pris sur la partie **numérique** : `reference` est du `TEXT`
+/// et `{:04}` n'est qu'une largeur minimale, donc une comparaison textuelle
+/// classerait `26-06-10000` avant `26-06-9999` et rendrait deux fois la même
+/// référence.
 fn generer_reference(conn: &Connection, date_emission: &str) -> AppResult<String> {
     let (aa, mm) = annee_mois(date_emission)?;
     let prefix = format!("{aa}-{mm}-");
-    let dernier: Option<String> = conn.query_row(
-        "SELECT MAX(reference) FROM notes_de_frais WHERE reference LIKE ?1",
-        [format!("{prefix}%")],
+    let dernier: Option<i64> = conn.query_row(
+        "SELECT MAX(CAST(SUBSTR(reference, ?1) AS INTEGER))
+           FROM notes_de_frais WHERE reference LIKE ?2",
+        rusqlite::params![prefix.len() as i64 + 1, format!("{prefix}%")],
         |r| r.get(0),
     )?;
-    let suivant = dernier
-        .and_then(|r| r.rsplit('-').next().and_then(|n| n.parse::<i64>().ok()))
-        .unwrap_or(0)
-        + 1;
+    let suivant = dernier.unwrap_or(0) + 1;
     Ok(format!("{prefix}{suivant:04}"))
 }
 
@@ -121,6 +137,7 @@ pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
     valider_lignes(n)?;
     valider_total(conn, n)?;
     valider_remise(n.remise_type.as_deref(), n.remise_valeur)?;
+    valider_echeance(n)?;
     // Une remise sans type saisi n'est pas appliquée : on normalise à zéro pour
     // que la valeur stockée reflète toujours ce qui est réellement déduit.
     let remise_valeur = if n.remise_type.is_some() {
@@ -140,7 +157,7 @@ pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
             n.client_id,
             reference,
             n.date_emission,
-            STATUT_EMISE,
+            StatutNote::Emise.as_str(),
             n.echeance,
             crate::repositories::now(),
             n.remise_type,
@@ -150,6 +167,10 @@ pub fn create_note(conn: &mut Connection, n: &NewNote) -> AppResult<i64> {
     let note_id = tx.last_insert_rowid();
 
     inserer_lignes(&tx, note_id, n)?;
+    // Une facture entièrement remisée (net = 0) est soldée d'emblée : sans ce
+    // recalcul elle resterait « emise » à vie, aucun paiement ne pouvant la
+    // solder. Doit venir **après** les lignes, dont dépend le total.
+    crate::services::paiements_service::recalculer_statut(&tx, note_id)?;
 
     tx.commit()?;
     Ok(note_id)
@@ -183,10 +204,11 @@ pub fn update_note(conn: &mut Connection, id: i64, n: &NewNote) -> AppResult<()>
     valider_lignes(n)?;
     valider_total(conn, n)?;
     valider_remise(n.remise_type.as_deref(), n.remise_valeur)?;
+    valider_echeance(n)?;
     annee_mois(&n.date_emission)?;
 
     let statut = notes::statut(conn, id)?;
-    if statut == "annulee" {
+    if statut == StatutNote::ANNULEE {
         return Err(AppError::Validation(
             "cette facture est annulée : elle ne peut plus être modifiée".into(),
         ));
@@ -224,8 +246,31 @@ pub fn update_note(conn: &mut Connection, id: i64, n: &NewNote) -> AppResult<()>
     }
     tx.execute("DELETE FROM note_lignes WHERE note_id = ?1", [id])?;
     inserer_lignes(&tx, id, n)?;
+    // Modifier les lignes ou la remise peut amener le net à zéro (ou l'en
+    // sortir) : on réaligne le statut, comme à la création.
+    crate::services::paiements_service::recalculer_statut(&tx, id)?;
     tx.commit()?;
     Ok(())
+}
+
+/// Annule une facture (statut « annulee ») : elle sort des totaux et des
+/// statistiques, mais reste consultable.
+///
+/// Refusé tant qu'un paiement valide y est rattaché : les totaux excluant les
+/// factures annulées, l'annulation ferait disparaître du tableau de bord et du
+/// solde client de l'argent réellement encaissé. Il faut d'abord annuler les
+/// paiements, ce qui trace le remboursement.
+pub fn annuler(conn: &Connection, id: i64) -> AppResult<()> {
+    if notes::statut(conn, id)? == StatutNote::ANNULEE {
+        return Ok(());
+    }
+    let actifs = notes::nb_paiements_actifs(conn, id)?;
+    if actifs > 0 {
+        return Err(AppError::Validation(format!(
+            "annulation impossible : {actifs} paiement(s) sont encore enregistrés              sur cette facture. Annulez-les d'abord."
+        )));
+    }
+    notes::set_statut(conn, id, StatutNote::ANNULEE)
 }
 
 #[cfg(test)]
@@ -529,7 +574,7 @@ mod tests {
         let mut conn = open_in_memory().unwrap();
         let (client, presta) = seed(&conn);
         let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
-        notes::annuler(&conn, id).unwrap();
+        annuler(&conn, id).unwrap();
 
         assert!(matches!(
             update_note(&mut conn, id, &new_note(client, presta, 2)),
@@ -615,6 +660,108 @@ mod tests {
         );
     }
 
+    /// Même défaut que pour les numéros de reçu, atténué par la remise à zéro
+    /// mensuelle : un `MAX(reference)` textuel classe « 26-06-10000 » avant
+    /// « 26-06-9999 » et rend deux fois la même référence.
+    #[test]
+    fn reference_ne_recycle_pas_au_dela_de_9999_dans_le_mois() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        conn.execute(
+            "UPDATE notes_de_frais SET reference = '26-06-9999' WHERE id = ?1",
+            [id],
+        )
+        .unwrap();
+        let id2 = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        conn.execute(
+            "UPDATE notes_de_frais SET reference = '26-06-10000' WHERE id = ?1",
+            [id2],
+        )
+        .unwrap();
+
+        let id3 = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        assert_eq!(
+            notes::get(&conn, id3).unwrap().reference.as_deref(),
+            Some("26-06-10001")
+        );
+    }
+
+    /// Une facture entièrement remisée est soldée dès son émission : aucun
+    /// paiement ne peut la solder après coup (un montant nul est refusé), donc
+    /// exiger un encaissement la laissait « emise » à vie.
+    #[test]
+    fn note_a_net_nul_est_payee_des_la_creation() {
+        use crate::services::paiements_service;
+
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn); // 10 000
+        let mut n = new_note(client, presta, 1);
+        n.remise_type = Some(REMISE_POURCENT.into());
+        n.remise_valeur = 100;
+        let id = create_note(&mut conn, &n).unwrap();
+
+        assert_eq!(notes::total(&conn, id).unwrap(), 0);
+        assert_eq!(notes::statut(&conn, id).unwrap(), StatutNote::PAYEE);
+        assert!(paiements_service::solde(&conn, id).unwrap().payee);
+    }
+
+    /// Une facture ordinaire reste « emise » à la création : le recalcul de
+    /// statut ne doit pas solder ce qui reste dû.
+    #[test]
+    fn note_ordinaire_reste_emise_a_la_creation() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let id = create_note(&mut conn, &new_note(client, presta, 1)).unwrap();
+        assert_eq!(notes::statut(&conn, id).unwrap(), StatutNote::EMISE);
+    }
+
+    /// Retirer la remise d'une facture soldée à 0 la remet en « emise » : le
+    /// statut suit le net après modification, dans les deux sens.
+    #[test]
+    fn update_note_realigne_le_statut_sur_le_net() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+        let mut n = new_note(client, presta, 1);
+        n.remise_type = Some(REMISE_POURCENT.into());
+        n.remise_valeur = 100;
+        let id = create_note(&mut conn, &n).unwrap();
+        assert_eq!(notes::statut(&conn, id).unwrap(), StatutNote::PAYEE);
+
+        update_note(&mut conn, id, &new_note(client, presta, 1)).unwrap();
+
+        assert_eq!(notes::total(&conn, id).unwrap(), 10_000);
+        assert_eq!(notes::statut(&conn, id).unwrap(), StatutNote::EMISE);
+    }
+
+    /// La règle n'existait que dans le formulaire : un appel direct à la
+    /// commande créait une facture due avant d'exister.
+    #[test]
+    fn echeance_anterieure_a_lemission_est_refusee() {
+        let mut conn = open_in_memory().unwrap();
+        let (client, presta) = seed(&conn);
+
+        let mut n = new_note(client, presta, 1); // émise le 2026-06-18
+        n.echeance = Some("2026-06-17".into());
+        assert!(matches!(
+            create_note(&mut conn, &n),
+            Err(AppError::Validation(_))
+        ));
+
+        // Une échéance le jour même, ou plus tard, reste acceptée.
+        let mut meme_jour = new_note(client, presta, 1);
+        meme_jour.echeance = Some("2026-06-18".into());
+        let id = create_note(&mut conn, &meme_jour).unwrap();
+
+        // Et la modification applique la même règle.
+        let mut modif = new_note(client, presta, 1);
+        modif.echeance = Some("2026-06-01".into());
+        assert!(matches!(
+            update_note(&mut conn, id, &modif),
+            Err(AppError::Validation(_))
+        ));
+    }
+
     /// Annuler une facture sans paiement la retire des totaux mais la conserve.
     #[test]
     fn annuler_exclut_des_totaux_sans_supprimer() {
@@ -628,12 +775,12 @@ mod tests {
             20_000
         );
 
-        notes::annuler(&conn, id).unwrap();
+        annuler(&conn, id).unwrap();
 
         assert_eq!(stats::resume(&conn, None, None).unwrap().total_facture, 0);
         assert_eq!(stats::resume(&conn, None, None).unwrap().nb_notes, 0);
         // La facture reste consultable, avec ses lignes.
-        assert_eq!(notes::get(&conn, id).unwrap().statut, "annulee");
+        assert_eq!(notes::get(&conn, id).unwrap().statut, StatutNote::ANNULEE);
         assert_eq!(notes::lignes(&conn, id).unwrap().len(), 1);
     }
 }
