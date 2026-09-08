@@ -7,6 +7,29 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Corrigé
+
+- **Une mise à jour interrompue pouvait laisser le poste sans application.**
+  L'installateur n'étant pas signé, Windows affiche « Windows a protégé votre
+  ordinateur ». Rien ne prévenait de cet écran ni de la fermeture de
+  l'application qui suit : l'installation abandonnée à ce moment-là laissait un
+  raccourci orphelin, à l'icône blanche, pointant vers un programme absent.
+  L'application explique désormais ce qui va se passer et demande une
+  confirmation explicite avant de lancer l'installation, affiche la progression
+  du téléchargement, et indique en cas d'échec que la version en place est
+  conservée.
+- **Un démarrage impossible affiche enfin sa cause.** Une erreur à l'ouverture
+  de la base fermait la fenêtre sans le moindre message — sur un programme
+  graphique Windows, une panique est totalement muette. Une boîte de dialogue
+  nomme désormais le problème et rappelle où sont les données ; le détail est
+  consigné dans `demarrage-erreur.log`, à côté de la base.
+
+### Ajouté
+
+- Un `README` décrivant l'installation sous Windows, l'avertissement attendu,
+  l'emplacement des données et la marche à suivre si l'application ne démarre
+  pas.
+
 ### Corrigé (audit bugs et simplification)
 
 - **Numéros de reçus en double au-delà du 9999e.** Le numéro suivant était
