@@ -9,6 +9,10 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ### Corrigé
 
+- **Facture et reçu imprimés au format A4.** Le format papier dépendait du
+  réglage par défaut du système ou du navigateur/webview (souvent Letter hors
+  zone A4), ce qui pouvait mal cadrer le document sur des feuilles A4. Une
+  règle `@page` impose désormais A4 avec des marges de 15 mm.
 - **Une mise à jour interrompue pouvait laisser le poste sans application.**
   L'installateur n'étant pas signé, Windows affiche « Windows a protégé votre
   ordinateur ». Rien ne prévenait de cet écran ni de la fermeture de
