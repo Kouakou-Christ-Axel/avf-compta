@@ -914,6 +914,13 @@ button:hover {
 
 /* ---------- Print ---------- */
 
+/* Facture/reçu au format A4 quel que soit le format papier par défaut du
+   système (souvent Letter hors zone A4) ou du navigateur/webview. */
+@page {
+  size: A4;
+  margin: 15mm;
+}
+
 @media print {
   /* NoteImprimable/RecuImprimable sont rendus via un portail sous <body>, en
      dehors de #root : masquer #root en bloc suffit à écarter tout le reste
