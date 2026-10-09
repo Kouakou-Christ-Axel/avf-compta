@@ -9,6 +9,10 @@ et le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
 ### Corrigé
 
+- **Facture et reçu imprimés à nouveau sur toute la largeur de la page.** Le
+  document était réduit à son contenu et centré (~50 % de la largeur, en-tête
+  comprimé) : `place-items: center` de la fenêtre modale s'appliquait aussi à
+  l'impression.
 - **Facture et reçu imprimés au format A4.** Le format papier dépendait du
   réglage par défaut du système ou du navigateur/webview (souvent Letter hors
   zone A4), ce qui pouvait mal cadrer le document sur des feuilles A4. Une
