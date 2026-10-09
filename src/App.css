@@ -940,6 +940,10 @@ button:hover {
   .modal-overlay {
     position: static;
     display: block;
+    /* `place-items: center` (écran) s'applique aussi en bloc dans Chrome
+       récent : la modale était réduite à son contenu et centrée, d'où un
+       reçu imprimé étroit. */
+    place-items: normal;
     padding: 0;
     background: none;
   }
